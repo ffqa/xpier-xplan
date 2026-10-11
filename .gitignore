@@ -1,0 +1,14 @@
+# Binary
+/xplan
+
+# Frontend
+web/node_modules/
+web/dist/*
+!web/dist/.gitkeep
+web/tsconfig*.tsbuildinfo
+web/node_modules/.tmp/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
