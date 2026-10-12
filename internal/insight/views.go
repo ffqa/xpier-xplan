@@ -4,9 +4,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ffqa/xplan/internal/project"
-	"github.com/ffqa/xplan/internal/review"
-	"github.com/ffqa/xplan/internal/scanner"
+	"github.com/ffqa/xpier-xplan/internal/project"
+	"github.com/ffqa/xpier-xplan/internal/review"
+	"github.com/ffqa/xpier-xplan/internal/scanner"
 )
 
 // Card is the compact project summary used by the sidebar and the board.

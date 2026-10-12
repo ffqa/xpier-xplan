@@ -12,7 +12,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ffqa/xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/config"
 )
 
 // Snapshot is the result of one scan.

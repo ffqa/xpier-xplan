@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ffqa/xplan/internal/app"
-	"github.com/ffqa/xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/app"
+	"github.com/ffqa/xpier-xplan/internal/config"
 )
 
 // fakeReport is what the fake reviewer agent prints: Markdown plus the

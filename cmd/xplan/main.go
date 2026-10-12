@@ -17,12 +17,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ffqa/xplan/internal/app"
-	"github.com/ffqa/xplan/internal/config"
-	"github.com/ffqa/xplan/internal/insight"
-	"github.com/ffqa/xplan/internal/project"
-	"github.com/ffqa/xplan/internal/server"
-	"github.com/ffqa/xplan/web"
+	"github.com/ffqa/xpier-xplan/internal/app"
+	"github.com/ffqa/xpier-xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/insight"
+	"github.com/ffqa/xpier-xplan/internal/project"
+	"github.com/ffqa/xpier-xplan/internal/server"
+	"github.com/ffqa/xpier-xplan/web"
 )
 
 const usage = `xplan — cockpit for parallel projects

@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ffqa/xplan/internal/app"
-	"github.com/ffqa/xplan/internal/project"
-	"github.com/ffqa/xplan/internal/review"
+	"github.com/ffqa/xpier-xplan/internal/app"
+	"github.com/ffqa/xpier-xplan/internal/project"
+	"github.com/ffqa/xpier-xplan/internal/review"
 )
 
 // Result is what a command returns to the UI.

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ffqa/xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/config"
 )
 
 // ADR is one architecture/product decision record owned by xplan.

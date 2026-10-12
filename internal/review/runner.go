@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ffqa/xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/config"
 )
 
 // runResult is what one agent invocation produced.

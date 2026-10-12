@@ -1,4 +1,4 @@
-module github.com/ffqa/xplan
+module github.com/ffqa/xpier-xplan
 
 go 1.24.4
 

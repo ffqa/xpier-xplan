@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/ffqa/xplan/internal/insight"
-	"github.com/ffqa/xplan/internal/review"
+	"github.com/ffqa/xpier-xplan/internal/insight"
+	"github.com/ffqa/xpier-xplan/internal/review"
 )
 
 // schedulerTick is how often the background loop wakes up.

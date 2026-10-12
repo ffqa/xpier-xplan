@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ffqa/xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/config"
 )
 
 // Journal entry kinds.

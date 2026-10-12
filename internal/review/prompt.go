@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ffqa/xplan/internal/project"
-	"github.com/ffqa/xplan/internal/scanner"
+	"github.com/ffqa/xpier-xplan/internal/project"
+	"github.com/ffqa/xpier-xplan/internal/scanner"
 )
 
 // PromptInput is everything the context bundle is built from.

@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ffqa/xplan/internal/config"
-	"github.com/ffqa/xplan/internal/project"
-	"github.com/ffqa/xplan/internal/scanner"
+	"github.com/ffqa/xpier-xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/project"
+	"github.com/ffqa/xpier-xplan/internal/scanner"
 )
 
 // ErrAlreadyActive is returned when the same review kind is already queued

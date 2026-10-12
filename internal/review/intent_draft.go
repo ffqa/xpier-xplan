@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ffqa/xplan/internal/project"
+	"github.com/ffqa/xpier-xplan/internal/project"
 )
 
 // ErrNoIntentDocument means the agent answered without the expected sections.

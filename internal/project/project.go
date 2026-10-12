@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ffqa/xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/config"
 	"gopkg.in/yaml.v3"
 )
 

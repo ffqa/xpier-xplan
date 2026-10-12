@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ffqa/xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/config"
 )
 
 // Intent section headings; IntentFilled checks the first two.

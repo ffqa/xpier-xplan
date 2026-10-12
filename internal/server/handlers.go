@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ffqa/xplan/internal/app"
-	"github.com/ffqa/xplan/internal/config"
-	"github.com/ffqa/xplan/internal/console"
-	"github.com/ffqa/xplan/internal/project"
-	"github.com/ffqa/xplan/internal/review"
-	"github.com/ffqa/xplan/internal/scanner"
+	"github.com/ffqa/xpier-xplan/internal/app"
+	"github.com/ffqa/xpier-xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/console"
+	"github.com/ffqa/xpier-xplan/internal/project"
+	"github.com/ffqa/xpier-xplan/internal/review"
+	"github.com/ffqa/xpier-xplan/internal/scanner"
 )
 
 type reviewerInfo struct {

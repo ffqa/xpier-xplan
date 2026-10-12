@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ffqa/xplan/internal/config"
-	"github.com/ffqa/xplan/internal/insight"
-	"github.com/ffqa/xplan/internal/project"
-	"github.com/ffqa/xplan/internal/review"
-	"github.com/ffqa/xplan/internal/scanner"
+	"github.com/ffqa/xpier-xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/insight"
+	"github.com/ffqa/xpier-xplan/internal/project"
+	"github.com/ffqa/xpier-xplan/internal/review"
+	"github.com/ffqa/xpier-xplan/internal/scanner"
 )
 
 // Version is overridden at build time via -ldflags.
