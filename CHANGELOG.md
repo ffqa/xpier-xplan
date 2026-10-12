@@ -27,6 +27,12 @@ All notable changes to xplan are documented here. The format follows
 - Only review kinds (drift, code, security, deploy, test) produce verdicts,
   appear in the Review menu, count towards health and can be scheduled.
 
+### Fixed
+
+- The Markdown editor no longer replaces unsaved typing when the file changes
+  on the server (for example when an intent draft lands), and the Intent
+  editor no longer carries unsaved text over to another project.
+
 ## [0.1.0] - 2026-10-11
 
 ### Added

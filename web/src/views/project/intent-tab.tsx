@@ -69,6 +69,7 @@ export function IntentTab({ slug }: { slug: string }) {
 
   return (
     <MarkdownEditor
+      key={slug}
       storageKey="intent"
       value={intent.data.content}
       saving={saving}

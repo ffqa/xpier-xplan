@@ -38,13 +38,18 @@ export function MarkdownEditor({
   storageKey: string;
 }) {
   const [draft, setDraft] = useState(value);
+  const [syncedValue, setSyncedValue] = useState(value);
   const [mode, setMode] = useState<Mode>(
     () =>
       (localStorage.getItem(`xplan.editor.${storageKey}`) as Mode) || "split",
   );
   const dirty = draft !== value;
 
-  useEffect(() => setDraft(value), [value]);
+  // A server-side change (e.g. an agent's draft landing) must not wipe unsaved typing.
+  if (value !== syncedValue) {
+    setSyncedValue(value);
+    if (draft === syncedValue) setDraft(value);
+  }
 
   useEffect(() => {
     if (replacement) setDraft(replacement.content);
