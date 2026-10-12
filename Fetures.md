@@ -198,16 +198,73 @@ flowchart TD
 
 ### Reviewer presets
 
-| Preset         | Command (argv template)                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------- |
-| `cursor-agent` | `cursor-agent -p --output-format text --mode ask --trust --workspace {path} {prompt}`             |
-| `codex`        | `codex exec --sandbox read-only --skip-git-repo-check -C {path} {prompt}`                         |
-| `claude`       | `claude -p {prompt} --allowedTools=Read,Grep,Glob --disallowedTools=Edit,Write,Bash,NotebookEdit` |
-| `omp`          | `omp -p --no-session --cwd {path} --tools read,grep,glob {prompt}`                                |
+Every preset runs the agent read-only. The mechanism differs per agent:
+
+| Preset         | Command (argv template)                                                                                                                      | How it stays read-only                                                                   |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `cursor-agent` | `cursor-agent -p --output-format text --mode ask --trust --workspace {path} {prompt}`                                                        | Ask mode                                                                                 |
+| `codex`        | `codex exec --sandbox read-only --skip-git-repo-check -C {path} {prompt}`                                                                    | Read-only sandbox                                                                        |
+| `claude`       | `claude -p {prompt} --tools=Read,Grep,Glob --allowedTools=Read,Grep,Glob --disallowedTools=Edit,Write,Bash,NotebookEdit --strict-mcp-config` | Hard tool allowlist; the user's MCP servers are not loaded                               |
+| `kimi`         | `kimi -p {prompt} --agent-file {xplan_home}/agents/kimi-readonly.md`                                                                         | `-p` auto-approves every tool, so the agent profile only has Read, Grep and Glob         |
+| `gemini`       | `gemini -p {prompt} --approval-mode default`                                                                                                 | Headless mode denies tools that need approval. Plan mode is not used: it allows YOLO.    |
+| `qwen`         | `qwen -p {prompt} --approval-mode default`                                                                                                   | Same as gemini                                                                           |
+| `opencode`     | `opencode run --agent plan {prompt}`                                                                                                         | Built-in read-only plan agent                                                            |
+| `kiro`         | `kiro-cli chat --no-interactive --trust-tools=fs_read {prompt}`                                                                              | Only `fs_read` is trusted; other tools need an approval non-interactive mode cannot give |
+| `omp`          | `omp -p --no-session --cwd {path} --tools read,grep,glob {prompt}`                                                                           | Tool allowlist                                                                           |
 
 Placeholders: `{prompt}` (prompt text), `{prompt_file}` (path of the prompt file),
-`{path}` (project directory). Add your own presets under `reviewers:` in
-`~/.xplan/config.yaml`.
+`{path}` (project directory), `{xplan_home}` (`~/.xplan`). Add your own presets
+under `reviewers:` in `~/.xplan/config.yaml`. Built-in commands that earlier
+versions wrote into `config.yaml` and that are known to be broken or weaker are
+replaced on load.
+
+### 6.1 Choosing a reviewer (`auto`)
+
+`default_reviewer` and a project's `reviewer` may be `auto`: xplan picks the
+first working preset at run time, so reviews keep working when one agent is not
+installed or not logged in.
+
+```mermaid
+flowchart TD
+  J[Job with reviewer auto] --> L[Candidates: reviewer_order, then other presets A-Z]
+  L --> I{Binary installed?}
+  I -- no --> S[Skip, note 'not installed'] --> L
+  I -- yes --> F{Fresh health result?}
+  F -- ok --> R[Run the review]
+  F -- failed --> S2[Skip, note the reason] --> L
+  F -- none --> T[Smoke test: reply XPLAN-OK, 2 min, empty temp dir]
+  T -- ok --> R
+  T -- failed --> S2
+  R --> C{Run failed with login or missing binary?}
+  C -- yes --> S2
+  C -- no --> D[Done: job.reviewer = pick, job.attempts = skipped]
+  L -- none left --> E[Job fails: No working reviewer, with every reason]
+```
+
+- **Health**: stored in `~/.xplan/reviewers-health.json`, one entry per preset:
+  `status` (`ok`, `auth`, `missing`, `timeout`, `error`), `detail` (the agent's
+  own error line, terminal colors removed), `checked_at`, `duration_ms`,
+  `source` (`test` or `run`). A success is trusted for 24 hours, a failure for
+  6 hours. Real reviews update it too, but only with clear signals (success,
+  login problem, missing binary); a crash or timeout on a big project says
+  little about the agent.
+- **Login detection**: messages such as "authentication required", "not logged
+  in", "401", "api key", "subscription", "quota" or "opening browser" mark the
+  preset as `auth` ("needs login or subscription").
+- **Test one**: `POST /api/reviewers/{name}/test` → `200`
+  `{"name", "health", "health_label"}`; `400` for an unknown preset.
+- **Test all**: `POST /api/reviewers/test` → `200` `{"results": {name: health},
+"reviewers": [...]}`. Installed presets run in parallel.
+- **Meta**: `GET /api/meta` lists `reviewers` in auto order, each with
+  `installed`, `health` and `health_label`, plus `reviewer_order` and
+  `auto_choice` (`{"name", "verified"}`: what auto would use now, and whether it
+  passed a recent check).
+- **Jobs**: `reviewer_requested` is `auto` when the pick happened at run time;
+  `reviewer` is the pick; `attempts` lists the skipped presets as `name: reason`
+  (shown in the review detail).
+- **UI**: Settings → Reviewer agents shows the order (arrows, then Save), the
+  health badge, the last check and a Test button per preset, and Test all. The
+  status bar shows `auto → codex` and links to Settings.
 
 ## 7. Console
 
@@ -234,18 +291,43 @@ API: `POST /api/projects/{slug}/console` with `{"input": "..."}` →
 
 ## 8. Global settings (`~/.xplan/config.yaml`)
 
-| Key                      | Default                               | Meaning                               |
-| ------------------------ | ------------------------------------- | ------------------------------------- |
-| `listen`                 | `127.0.0.1:7788`                      | HTTP address                          |
-| `scan_interval`          | `15m`                                 | Background rescan period              |
-| `review_timeout`         | `20m`                                 | Per-review timeout                    |
-| `max_concurrent_reviews` | `2`                                   | Parallel reviews                      |
-| `default_reviewer`       | `cursor-agent`                        | Used when a project has no reviewer   |
-| `report_language`        | `English`                             | Language the agent writes reports in  |
-| `default_schedule`       | drift and security weekly, others off | Copied into newly registered projects |
-| `reviewers`              | presets above                         | Agent command templates               |
+| Key                      | Default                                                              | Meaning                               |
+| ------------------------ | -------------------------------------------------------------------- | ------------------------------------- |
+| `listen`                 | `127.0.0.1:7788`                                                     | HTTP address                          |
+| `scan_interval`          | `15m`                                                                | Background rescan period              |
+| `review_timeout`         | `20m`                                                                | Per-review timeout                    |
+| `max_concurrent_reviews` | `2`                                                                  | Parallel reviews                      |
+| `default_reviewer`       | `auto`                                                               | Used when a project has no reviewer   |
+| `reviewer_order`         | cursor-agent, codex, claude, kimi, gemini, qwen, opencode, kiro, omp | Order `auto` tries presets in         |
+| `language`               | `en`                                                                 | UI and server messages: `en` or `zh`  |
+| `report_language`        | `English`                                                            | Language the agent writes reports in  |
+| `default_schedule`       | drift and security weekly, others off                                | Copied into newly registered projects |
+| `reviewers`              | presets above                                                        | Agent command templates               |
 
 `GET /api/config`, `PATCH /api/config` (any subset of the editable keys).
+`400` for an unknown `default_reviewer`, an unknown name in `reviewer_order` or
+a `language` other than `en` and `zh`.
+
+### 8.1 Languages
+
+- **Switch**: the language button in the status bar, or Settings → Language →
+  Interface. Both save `language` on the server and re-render the UI at once.
+  Every browser follows the server setting.
+- **What is translated**: the whole UI, plus what the server writes for people:
+  console replies, health flags, reviewer status, review kind names, job errors
+  and intent draft summaries. Text already stored (old job summaries, notes) is
+  shown as it was written.
+- **What stays English**: prompts sent to agents (they follow instructions
+  best in English) and the agent preset descriptions in `config.yaml`. Reports
+  follow `report_language`; Settings offers English and Simplified Chinese as
+  one-click choices, any other language name works too.
+- **How it works**: the English text is the key. The web catalog lives in
+  `web/src/i18n/zh/*.ts` (`t("text", {vars})`, `tn(count, one, many)`), the
+  server catalog in `internal/i18n/zh.go` (`i18n.T(format, args...)`). Missing
+  entries fall back to English.
+- **Checks**: `npm run i18n:check` (web) and `go test ./internal/i18n` (server)
+  fail when a translatable string has no Chinese entry or a translation drops a
+  placeholder.
 
 ## 9. Errors
 
@@ -307,3 +389,39 @@ All API errors return `{"error": "message"}`:
   broken reviewer fails once instead of once per project.
 - Finding lifecycle (acknowledge or dismiss) so the Inbox only shows new items.
 - A changing default schedule could offer to update existing projects.
+
+## 12. Retrospective (v0.3.0, languages and more reviewers)
+
+**What went well**
+
+- Using the English text as the translation key kept the change mechanical: no
+  key naming, and anything untranslated still reads correctly in English.
+- Coverage checks on both sides (`npm run i18n:check`, `go test
+./internal/i18n`) caught every missing entry before the browser did.
+- Smoke-testing the real binaries found problems no flag review would: kimi's
+  `-p` auto-approves every tool, gemini's plan mode switches to YOLO, kiro waits
+  for a browser login.
+- Fake reviewers as `/bin/sh` scripts made the auto-pick and fallback paths
+  testable over HTTP without any real agent.
+
+**Problems found**
+
+- On this machine, `gemini` (0.1.9) and `qwen` (0.1.2) are leftovers in the Node
+  18 global folder. They are too old for `--approval-mode` and crash on Node 18.
+  Health shows them as failed or timed out; reinstalling them under the current
+  Node fixes it.
+- `claude -p` "hanging" (see v0.1.0) was its API endpoint answering `502 Bad
+gateway` while Claude Code retried up to 11 times. The smoke test shows it as
+  timed out. The preset now also uses a hard tool allowlist (`--tools`) and
+  skips the user's MCP servers (`--strict-mcp-config`).
+- Agents print terminal color codes even when piped; health details strip them.
+- Edits to one file must not run in the same parallel batch as the build that
+  needs them (happened again, see `docs/diary.md`).
+
+**Next ideas**
+
+- An API-based reviewer (OpenAI-compatible endpoint plus a read-only file tool)
+  for machines with no agent CLI at all.
+- Show `auth` presets with the exact login command (for example `agent login`,
+  `opencode auth login`).
+- Lazy-load Markdown rendering; the bundle is now about 770 KB (240 KB gzipped).

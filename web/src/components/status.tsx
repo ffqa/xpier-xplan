@@ -13,13 +13,17 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Tip } from "@/components/ui/tooltip";
 import {
+  jobStatusLabel,
+  kindLabel,
   levelDot,
   levelText,
+  severityLabel,
   severityVariant,
   statusColor,
   verdictLabel,
   verdictVariant,
 } from "@/lib/format";
+import { t } from "@/lib/i18n";
 import type {
   Flag,
   JobStatus,
@@ -104,7 +108,7 @@ export function VerdictBadge({
 export function SeverityBadge({ severity }: { severity: Severity }) {
   return (
     <Badge variant={severityVariant[severity]} className="w-16 uppercase">
-      {severity}
+      {severityLabel(severity)}
     </Badge>
   );
 }
@@ -114,19 +118,25 @@ export function JobStatusBadge({ status }: { status: JobStatus }) {
     return (
       <Badge variant="info">
         <Loader2Icon className="animate-spin" />
-        {status}
+        {jobStatusLabel(status)}
       </Badge>
     );
   }
-  if (status === "failed") return <Badge variant="crit">failed</Badge>;
-  if (status === "canceled") return <Badge variant="muted">canceled</Badge>;
+  if (status === "failed")
+    return <Badge variant="crit">{jobStatusLabel(status)}</Badge>;
+  if (status === "canceled")
+    return <Badge variant="muted">{jobStatusLabel(status)}</Badge>;
   return null;
 }
 
 export function FlagList({ flags, limit }: { flags: Flag[]; limit?: number }) {
   const shown = limit ? flags.slice(0, limit) : flags;
   if (shown.length === 0)
-    return <p className="text-xs text-muted-foreground">No issues detected.</p>;
+    return (
+      <p className="text-xs text-muted-foreground">
+        {t("No issues detected.")}
+      </p>
+    );
   return (
     <ul className="space-y-1.5">
       {shown.map((flag) => (
@@ -167,7 +177,13 @@ export function VerdictDots({
                 ? "text-crit"
                 : "text-muted-foreground";
         return (
-          <Tip key={kind} label={`${kind}: ${verdictLabel(verdict, kind)}`}>
+          <Tip
+            key={kind}
+            label={t("{kind}: {verdict}", {
+              kind: kindLabel(kind),
+              verdict: verdictLabel(verdict, kind),
+            })}
+          >
             <span className={cn("inline-flex", color)}>
               <KindIcon kind={kind} className="size-3" />
             </span>

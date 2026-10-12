@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ffqa/xpier-xplan/internal/app"
+	"github.com/ffqa/xpier-xplan/internal/i18n"
 	"github.com/ffqa/xpier-xplan/internal/project"
 	"github.com/ffqa/xpier-xplan/internal/review"
 )
@@ -58,6 +59,18 @@ var Commands = []Command{
 	{"/xteam", "<message> | status", "Ring the project's xteam PM, or show xteam status"},
 	{"/open", "", "Open the project in Cursor"},
 	{"/help", "", "List commands"},
+}
+
+// LocalizedCommands returns Commands with arguments and summaries in the UI
+// language.
+func LocalizedCommands() []Command {
+	localized := make([]Command, len(Commands))
+	for index, command := range Commands {
+		command.Args = i18n.T(command.Args)
+		command.Summary = i18n.T(command.Summary)
+		localized[index] = command
+	}
+	return localized
 }
 
 const externalTimeout = 60 * time.Second
@@ -111,31 +124,31 @@ func (c *Console) dispatch(target *project.Project, input string) Result {
 		if _, err := c.App.MarkCaughtUp(target.Slug); err != nil {
 			return fail(err)
 		}
-		return Result{OK: true, Output: "Marked as caught up.", Refresh: []string{"brief", "overview"}}
+		return Result{OK: true, Output: i18n.T("Marked as caught up."), Refresh: []string{"brief", "overview"}}
 	case "/xteam":
 		return c.xteam(target, args)
 	case "/open":
 		return c.open(target)
 	default:
-		return Result{OK: false, Output: fmt.Sprintf("Unknown command %s. Type /help.", name)}
+		return Result{OK: false, Output: i18n.T("Unknown command %s. Type /help.", name)}
 	}
 }
 
 func (c *Console) ask(target *project.Project, question string) Result {
 	if strings.TrimSpace(question) == "" {
-		return Result{OK: false, Output: "Usage: /ask <question>"}
+		return Result{OK: false, Output: i18n.T("Usage: /ask <question>")}
 	}
 	job, err := c.App.Reviews.Enqueue(target.Slug, "ask", question, "console")
 	if err != nil {
 		return fail(err)
 	}
-	return Result{OK: true, Output: fmt.Sprintf("Asked %s (read-only). The answer will appear here.", job.Reviewer), JobID: job.ID, Refresh: []string{"reviews"}}
+	return Result{OK: true, Output: i18n.T("Asked %s (read-only). The answer will appear here.", job.ReviewerLabel()), JobID: job.ID, Refresh: []string{"reviews"}}
 }
 
 func (c *Console) review(target *project.Project, args string) Result {
 	kinds := strings.Fields(args)
 	if len(kinds) == 0 {
-		return Result{OK: false, Output: "Usage: /review <drift|code|security|deploy|test|all>"}
+		return Result{OK: false, Output: i18n.T("Usage: /review <drift|code|security|deploy|test|all>")}
 	}
 	if len(kinds) == 1 && kinds[0] == "all" {
 		kinds = review.ReviewKindIDs()
@@ -144,18 +157,18 @@ func (c *Console) review(target *project.Project, args string) Result {
 	jobIDs := []string{}
 	for _, kind := range kinds {
 		if !review.IsReviewKind(kind) {
-			lines = append(lines, fmt.Sprintf("%s: not a review kind (drift, code, security, deploy, test)", kind))
+			lines = append(lines, i18n.T("%s: not a review kind (drift, code, security, deploy, test)", kind))
 			continue
 		}
 		job, err := c.App.Reviews.Enqueue(target.Slug, kind, "", "console")
 		switch {
 		case errors.Is(err, review.ErrAlreadyActive):
-			lines = append(lines, fmt.Sprintf("%s: already running (%s)", kind, job.ID))
+			lines = append(lines, i18n.T("%s: already running (%s)", kind, job.ID))
 		case err != nil:
 			lines = append(lines, fmt.Sprintf("%s: %v", kind, err))
 		default:
 			jobIDs = append(jobIDs, job.ID)
-			lines = append(lines, fmt.Sprintf("%s: queued with %s (%s)", kind, job.Reviewer, job.ID))
+			lines = append(lines, i18n.T("%s: queued with %s (%s)", kind, job.ReviewerLabel(), job.ID))
 		}
 	}
 	return Result{OK: len(jobIDs) > 0, Output: strings.Join(lines, "\n"), JobIDs: jobIDs, Refresh: []string{"reviews", "brief"}}
@@ -164,14 +177,14 @@ func (c *Console) review(target *project.Project, args string) Result {
 func (c *Console) draftIntent(target *project.Project) Result {
 	job, err := c.App.Reviews.Enqueue(target.Slug, review.KindIntent, "", "console")
 	if errors.Is(err, review.ErrAlreadyActive) {
-		return Result{OK: false, Output: fmt.Sprintf("An intent draft is already running (%s).", job.ID), JobID: job.ID}
+		return Result{OK: false, Output: i18n.T("An intent draft is already running (%s).", job.ID), JobID: job.ID}
 	}
 	if err != nil {
 		return fail(err)
 	}
 	return Result{
 		OK:      true,
-		Output:  fmt.Sprintf("Drafting the intent with %s (read-only). An empty intent.md is filled in; a written one is kept and the draft waits in the Intent tab.", job.Reviewer),
+		Output:  i18n.T("Drafting the intent with %s (read-only). An empty intent.md is filled in; a written one is kept and the draft waits in the Intent tab.", job.ReviewerLabel()),
 		JobID:   job.ID,
 		Refresh: []string{"reviews", "intent"},
 	}
@@ -179,7 +192,7 @@ func (c *Console) draftIntent(target *project.Project) Result {
 
 func (c *Console) park(target *project.Project, args string) Result {
 	if args == "" {
-		return Result{OK: false, Output: "Usage: /park <where you stopped> | <next step> | <open questions>"}
+		return Result{OK: false, Output: i18n.T("Usage: /park <where you stopped> | <next step> | <open questions>")}
 	}
 	parts := strings.Split(args, "|")
 	entry := project.Entry{Stopped: strings.TrimSpace(parts[0])}
@@ -192,14 +205,14 @@ func (c *Console) park(target *project.Project, args string) Result {
 	if _, err := c.App.Park(target.Slug, entry); err != nil {
 		return fail(err)
 	}
-	return Result{OK: true, Output: "Parked. Next time you open this project you will see this first.", Refresh: []string{"brief", "journal", "overview"}}
+	return Result{OK: true, Output: i18n.T("Parked. Next time you open this project you will see this first."), Refresh: []string{"brief", "journal", "overview"}}
 }
 
 func (c *Console) note(target *project.Project, args string) Result {
 	if _, err := c.App.Store.AppendJournal(target.Slug, project.Entry{Kind: project.EntryNote, Text: args}); err != nil {
 		return fail(err)
 	}
-	return Result{OK: true, Output: "Noted.", Refresh: []string{"journal"}}
+	return Result{OK: true, Output: i18n.T("Noted."), Refresh: []string{"journal"}}
 }
 
 func (c *Console) adr(target *project.Project, args string) Result {
@@ -207,7 +220,7 @@ func (c *Console) adr(target *project.Project, args string) Result {
 	if err != nil {
 		return fail(err)
 	}
-	return Result{OK: true, Output: fmt.Sprintf("Created %s. Fill in the decision in the Decisions tab.", created.ID), Refresh: []string{"adrs"}}
+	return Result{OK: true, Output: i18n.T("Created %s. Fill in the decision in the Decisions tab.", created.ID), Refresh: []string{"adrs"}}
 }
 
 func (c *Console) status(target *project.Project, args string) Result {
@@ -215,7 +228,7 @@ func (c *Console) status(target *project.Project, args string) Result {
 	if _, err := c.App.Store.Update(target.Slug, project.Patch{Status: &value}); err != nil {
 		return fail(err)
 	}
-	return Result{OK: true, Output: "Status set to " + value + ".", Refresh: []string{"overview", "brief"}}
+	return Result{OK: true, Output: i18n.T("Status set to %s.", value), Refresh: []string{"overview", "brief"}}
 }
 
 func (c *Console) scan(target *project.Project) Result {
@@ -223,15 +236,15 @@ func (c *Console) scan(target *project.Project) Result {
 	if err != nil {
 		return fail(err)
 	}
-	return Result{OK: true, Output: fmt.Sprintf("Scanned in %dms: %d docs, checklist %d/%d.", snapshot.DurationMs, len(snapshot.Docs), snapshot.Checklist.Done, snapshot.Checklist.Total), Refresh: []string{"brief", "docs", "overview"}}
+	return Result{OK: true, Output: i18n.T("Scanned in %dms: %d docs, checklist %d/%d.", snapshot.DurationMs, len(snapshot.Docs), snapshot.Checklist.Done, snapshot.Checklist.Total), Refresh: []string{"brief", "docs", "overview"}}
 }
 
 func (c *Console) xteam(target *project.Project, args string) Result {
 	if _, err := os.Stat(filepath.Join(target.Path, ".xteam")); err != nil {
-		return Result{OK: false, Output: "This project has no .xteam directory; xteam is not set up here."}
+		return Result{OK: false, Output: i18n.T("This project has no .xteam directory; xteam is not set up here.")}
 	}
 	if args == "" {
-		return Result{OK: false, Output: "Usage: /xteam <message for pm>  or  /xteam status"}
+		return Result{OK: false, Output: i18n.T("Usage: /xteam <message for pm>  or  /xteam status")}
 	}
 	argv := []string{"say", "pm", args}
 	if args == "status" {
@@ -246,7 +259,7 @@ func (c *Console) xteam(target *project.Project, args string) Result {
 			c.App.Logger.Printf("console: journal xteam command: %v", err)
 		}
 	}
-	return Result{OK: true, Output: nonEmpty(strings.TrimSpace(output), "Delivered to xteam pm.")}
+	return Result{OK: true, Output: nonEmpty(strings.TrimSpace(output), i18n.T("Delivered to xteam pm."))}
 }
 
 func (c *Console) open(target *project.Project) Result {
@@ -254,12 +267,12 @@ func (c *Console) open(target *project.Project) Result {
 		if output, err := runExternal(target.Path, "cursor", target.Path); err != nil {
 			return Result{OK: false, Output: strings.TrimSpace(output + "\n" + err.Error())}
 		}
-		return Result{OK: true, Output: "Opened in Cursor."}
+		return Result{OK: true, Output: i18n.T("Opened in Cursor.")}
 	}
 	if output, err := runExternal(target.Path, "open", target.Path); err != nil {
 		return Result{OK: false, Output: strings.TrimSpace(output + "\n" + err.Error())}
 	}
-	return Result{OK: true, Output: "Opened in Finder."}
+	return Result{OK: true, Output: i18n.T("Opened in Finder.")}
 }
 
 // History returns the newest console lines first.
@@ -335,9 +348,9 @@ func runExternal(dir, binary string, args ...string) (string, error) {
 
 func helpText() string {
 	var b strings.Builder
-	b.WriteString("Plain text asks the reviewer agent (read-only). Commands:\n")
-	for _, command := range Commands {
-		fmt.Fprintf(&b, "  %-11s %-48s %s\n", command.Name, command.Args, command.Summary)
+	b.WriteString(i18n.T("Plain text asks the reviewer agent (read-only). Commands:") + "\n")
+	for _, command := range LocalizedCommands() {
+		fmt.Fprintf(&b, "  %-14s %-48s %s\n", command.Name, command.Args, command.Summary)
 	}
 	return b.String()
 }

@@ -9,6 +9,7 @@ import {
 
 import { Tip } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import { useQuery } from "@/lib/query";
 import { routeHref, type Route } from "@/lib/route";
 import { useUI } from "@/lib/ui-state";
@@ -59,7 +60,7 @@ export function ActivityBar({ route }: { route: Route }) {
         />
       ))}
       <div className="mt-auto flex flex-col items-center gap-1">
-        <Tip label="Console (⌘J)" side="right">
+        <Tip label={t("Console (⌘J)")} side="right">
           <button
             type="button"
             onClick={() => ui.toggleConsole()}
@@ -92,7 +93,7 @@ function ActivityLink({
 }) {
   const Icon = item.icon;
   return (
-    <Tip label={item.label} side="right">
+    <Tip label={t(item.label)} side="right">
       <a
         href={routeHref({ view: item.view } as Route)}
         className={cn(

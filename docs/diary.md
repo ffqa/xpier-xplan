@@ -2,6 +2,39 @@
 
 Recurring problems and how they were resolved. Newest first.
 
+## 2026-10-12
+
+### Headless `claude -p` hangs: cause found
+
+- **Symptom**: same as before; the smoke test times out after 2 minutes even
+  with `--strict-mcp-config`.
+- **Cause**: `~/.claude/debug/<session>.txt` (written with `--debug`) shows
+  the request going out, no first byte for 30 s, then
+  `API error (attempt 1/11): 502 Bad gateway`. The configured API endpoint was
+  down, and Claude Code retries up to 11 times. Hooks and MCP were not the
+  problem.
+- **Lesson**: for a silent agent, read its own debug log before changing flags.
+  xplan reports this as `timeout`; the detail cannot show the 502 because
+  Claude Code prints nothing to stdout or stderr.
+
+### Old `gemini` and `qwen` picked from the Node 18 folder
+
+- **Symptom**: gemini failed with `Unknown arguments: approval-mode`; qwen
+  timed out.
+- **Cause**: `LookupAgent` also searches every nvm Node version. The only
+  installs were gemini-cli 0.1.9 and qwen-code 0.1.2 under Node 18, too old for
+  the preset flags (and they crash when run with Node 18 itself).
+- **Fix**: reinstall under the current Node:
+  `npm i -g @google/gemini-cli @qwen-code/qwen-code`.
+
+### Parallel edits to the same file (seen again)
+
+- **Symptom**: `undefined: strings` in a test right after adding the import.
+- **Cause**: the import edit and `go test` went out in the same parallel
+  batch; the test compiled the old file.
+- **Fix**: same rule as below, extended: a build or test that depends on an
+  edit runs in the next step, never in the same batch.
+
 ## 2026-10-11
 
 ### Agent presets that look right but do not run
@@ -20,7 +53,7 @@ Recurring problems and how they were resolved. Newest first.
 - **Symptom**: the process never prints and times out.
 - **Tried**: `--strict-mcp-config`, `--settings '{"disableAllHooks":true}'`
   (still hangs); `--setting-sources project,local` (loses env-based auth).
-- **Status**: open. Use `codex` or `cursor-agent` meanwhile.
+- **Status**: solved on 2026-10-12, see above (API endpoint returned 502).
 
 ### `cursor-agent` authentication
 

@@ -2,6 +2,7 @@ import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 
+import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 function Dialog(props: DialogPrimitive.Root.Props) {
@@ -29,7 +30,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close className="absolute top-3 right-3 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [&_svg]:size-4">
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t("Close")}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Popup>

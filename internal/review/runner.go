@@ -22,6 +22,20 @@ type runResult struct {
 	Err      error
 }
 
+// ErrAgentMissing means the reviewer's binary is not on PATH.
+var ErrAgentMissing = errors.New("agent is not installed")
+
+// errTimedOut marks runs stopped by the review deadline.
+var errTimedOut = errors.New("timed out")
+
+// ArgvVars are the values substituted into a reviewer's argv template.
+type ArgvVars struct {
+	Prompt     string
+	PromptFile string
+	Path       string
+	Home       string
+}
+
 // extraPathDirs are appended to PATH so agents installed in user locations are
 // found even when xplan is started from launchd with a minimal environment.
 func extraPathDirs() []string {
@@ -47,7 +61,7 @@ func AugmentedPath() string {
 func LookupAgent(binary string) (string, error) {
 	if strings.Contains(binary, "/") {
 		if _, err := os.Stat(binary); err != nil {
-			return "", fmt.Errorf("agent binary %s not found", binary)
+			return "", fmt.Errorf("%w: %s not found", ErrAgentMissing, binary)
 		}
 		return binary, nil
 	}
@@ -60,19 +74,21 @@ func LookupAgent(binary string) (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("agent %q is not installed (not on PATH)", binary)
+	return "", fmt.Errorf("%w: %q is not on PATH", ErrAgentMissing, binary)
 }
 
-// BuildArgv substitutes {prompt}, {prompt_file} and {path} in a reviewer template.
-func BuildArgv(def config.ReviewerDef, prompt, promptFile, projectPath string) ([]string, error) {
+// BuildArgv substitutes the placeholders in a reviewer template. {prompt} is
+// replaced last so prompt text can never inject another placeholder.
+func BuildArgv(def config.ReviewerDef, vars ArgvVars) ([]string, error) {
 	if len(def.Command) == 0 {
 		return nil, errors.New("reviewer has an empty command")
 	}
 	argv := make([]string, 0, len(def.Command))
 	for _, part := range def.Command {
-		replaced := strings.ReplaceAll(part, "{path}", projectPath)
-		replaced = strings.ReplaceAll(replaced, "{prompt_file}", promptFile)
-		replaced = strings.ReplaceAll(replaced, "{prompt}", prompt)
+		replaced := strings.ReplaceAll(part, "{path}", vars.Path)
+		replaced = strings.ReplaceAll(replaced, "{xplan_home}", vars.Home)
+		replaced = strings.ReplaceAll(replaced, "{prompt_file}", vars.PromptFile)
+		replaced = strings.ReplaceAll(replaced, "{prompt}", vars.Prompt)
 		argv = append(argv, replaced)
 	}
 	return argv, nil
@@ -128,7 +144,7 @@ func runAgent(ctx context.Context, argv []string, projectPath, outputPath, logPa
 	}
 	switch {
 	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
-		result.Err = fmt.Errorf("timed out after %s", timeout)
+		result.Err = fmt.Errorf("%w after %s", errTimedOut, timeout)
 	case errors.Is(ctx.Err(), context.Canceled):
 		result.Err = errors.New("canceled")
 	case runErr != nil:

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRightIcon,
   CornerDownLeftIcon,
@@ -12,7 +12,15 @@ import { Markdown } from "@/components/markdown";
 import { KindIcon, VerdictBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-import { duration, jobActive } from "@/lib/format";
+import {
+  dateLocale,
+  duration,
+  jobActive,
+  jobStatusLabel,
+  kindLabel,
+} from "@/lib/format";
+import { t, tn } from "@/lib/i18n";
+import { jobReviewer } from "@/lib/reviewers";
 import { invalidate, useQuery } from "@/lib/query";
 import { projectFileResolver } from "@/lib/links";
 import { routeHref } from "@/lib/route";
@@ -32,13 +40,15 @@ export function ConsolePanel({ slug }: { slug: string | null }) {
       <header className="flex h-8 shrink-0 items-center gap-2 border-b px-3">
         <TerminalSquareIcon className="size-3.5 text-muted-foreground" />
         <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-          Console
+          {t("Console")}
         </span>
         {name && (
           <span className="text-[12px] text-muted-foreground">· {name}</span>
         )}
         <span className="ml-3 hidden text-[11px] text-muted-foreground/70 md:inline">
-          Agents run read-only. Type /help, a /command, or just ask a question.
+          {t(
+            "Agents run read-only. Type /help, a /command, or just ask a question.",
+          )}
         </span>
         <Button
           variant="ghost"
@@ -53,7 +63,7 @@ export function ConsolePanel({ slug }: { slug: string | null }) {
         <ConsoleBody key={slug} slug={slug} />
       ) : (
         <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-          Select a project on the left to issue commands.
+          {t("Select a project on the left to issue commands.")}
         </div>
       )}
     </section>
@@ -167,11 +177,15 @@ function ConsoleBody({ slug }: { slug: string }) {
       >
         {items.length === 0 && !history.loading && (
           <p className="text-muted-foreground">
-            No commands yet. Try{" "}
-            <span className="text-foreground">/review drift</span> to check this
-            project against its intent, or{" "}
-            <span className="text-foreground">/park</span> before switching
-            away.
+            {fillSlots(
+              t(
+                "No commands yet. Try {review} to check this project against its intent, or {park} before switching away.",
+              ),
+              {
+                review: <span className="text-foreground">/review drift</span>,
+                park: <span className="text-foreground">/park</span>,
+              },
+            )}
           </p>
         )}
         {items.map((item, index) => (
@@ -214,7 +228,9 @@ function ConsoleBody({ slug }: { slug: string }) {
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="/review drift · /park stopped | next | open · or ask anything about this project"
+            placeholder={t(
+              "/review drift · /park stopped | next | open · or ask anything about this project",
+            )}
             className="h-full flex-1 bg-transparent font-mono text-[12.5px] outline-none placeholder:text-muted-foreground/60"
             spellCheck={false}
             autoComplete="off"
@@ -241,7 +257,7 @@ function HistoryLine({ slug, item }: { slug: string; item: HistoryItem }) {
           {item.input}
         </span>
         <span className="ml-auto shrink-0 text-[10.5px] text-muted-foreground/60">
-          {new Date(item.at).toLocaleTimeString()}
+          {new Date(item.at).toLocaleTimeString(dateLocale())}
         </span>
       </div>
       <pre
@@ -291,16 +307,23 @@ function JobResult({ slug, id }: { slug: string; id: string }) {
     return (
       <p className="ml-4 flex items-center gap-2 text-info">
         <Loader2Icon className="size-3 animate-spin" />
-        {job.kind} {job.status} with {job.reviewer} ·{" "}
-        {duration(job.started_at ?? job.created_at)}
+        {t("{kind} {status} with {reviewer}", {
+          kind: kindLabel(job.kind),
+          status: jobStatusLabel(job.status),
+          reviewer: jobReviewer(job),
+        })}{" "}
+        · {duration(job.started_at ?? job.created_at)}
       </p>
     );
   }
   if (job.status !== "done") {
+    const kind = kindLabel(job.kind);
+    const status = jobStatusLabel(job.status);
     return (
       <p className="ml-4 text-crit">
-        {job.kind} {job.status}
-        {job.error ? `: ${job.error}` : ""}
+        {job.error
+          ? t("{kind} {status}: {error}", { kind, status, error: job.error })
+          : t("{kind} {status}", { kind, status })}
       </p>
     );
   }
@@ -308,7 +331,7 @@ function JobResult({ slug, id }: { slug: string; id: string }) {
     return (
       <div className="mt-1 ml-4 rounded-md border bg-card/60 px-3 py-2 font-sans">
         <Markdown className="text-[13px]" resolveHref={resolveHref}>
-          {detail.data?.report || "(empty answer)"}
+          {detail.data?.report || t("(empty answer)")}
         </Markdown>
       </div>
     );
@@ -325,14 +348,33 @@ function JobResult({ slug, id }: { slug: string; id: string }) {
       <KindIcon kind={job.kind} />
       <VerdictBadge verdict={job.verdict} kind={job.kind} />
       {typeof job.score === "number" && job.score > 0 && (
-        <span className="text-xs text-muted-foreground">score {job.score}</span>
+        <span className="text-xs text-muted-foreground">
+          {t("score {score}", { score: job.score })}
+        </span>
       )}
       <span className="min-w-0 flex-1 truncate text-[12.5px]">
-        {job.summary || `${job.findings.length} findings`}
+        {job.summary ||
+          tn(job.findings.length, "{count} finding", "{count} findings")}
       </span>
       <ArrowRightIcon className="size-3.5 text-muted-foreground" />
     </a>
   );
+}
+
+/** Replaces {name} slots in a translated sentence with React nodes. */
+function fillSlots(
+  template: string,
+  slots: Record<string, React.ReactNode>,
+): React.ReactNode[] {
+  return template
+    .split(/\{(\w+)\}/)
+    .map((part, index) =>
+      index % 2 === 1 ? (
+        <Fragment key={index}>{slots[part] ?? `{${part}}`}</Fragment>
+      ) : (
+        part
+      ),
+    );
 }
 
 function matchCommands(

@@ -11,6 +11,7 @@ import { HealthDot } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/tooltip";
 import { ago, statusHint, statusLabel } from "@/lib/format";
+import { t } from "@/lib/i18n";
 import { routeHref } from "@/lib/route";
 import type { Card, Status } from "@/lib/types";
 import { useOverview, useUI } from "@/lib/ui-state";
@@ -48,10 +49,10 @@ export function ProjectSidebar({ activeSlug }: { activeSlug: string | null }) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-9 shrink-0 items-center gap-1 px-3">
         <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-          Projects
+          {t("Projects")}
         </span>
         {overview.loading && overview.data && <Spinner className="size-3" />}
-        <Tip label="Register a project" side="bottom">
+        <Tip label={t("Register a project")} side="bottom">
           <Button
             variant="ghost"
             size="icon-xs"
@@ -68,7 +69,7 @@ export function ProjectSidebar({ activeSlug }: { activeSlug: string | null }) {
           <input
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
-            placeholder="Filter"
+            placeholder={t("Filter")}
             className="h-full w-full bg-transparent text-[12.5px] outline-none placeholder:text-muted-foreground"
           />
         </label>
@@ -82,13 +83,13 @@ export function ProjectSidebar({ activeSlug }: { activeSlug: string | null }) {
         )}
         {overview.data && overview.data.cards.length === 0 && (
           <div className="p-4 text-center text-xs text-muted-foreground">
-            No projects yet.
+            {t("No projects yet.")}
             <Button
               variant="link"
               size="xs"
               onClick={() => ui.setAddOpen(true)}
             >
-              Register one
+              {t("Register one")}
             </Button>
           </div>
         )}
@@ -150,7 +151,7 @@ function ProjectItem({ card, active }: { card: Card; active: boolean }) {
         ) : (
           <span
             className="text-[11px] text-muted-foreground tabular-nums"
-            title="Last commit"
+            title={t("Last commit")}
           >
             {ago(card.last_commit_at)}
           </span>

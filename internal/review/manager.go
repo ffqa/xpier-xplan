@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ffqa/xpier-xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/i18n"
 	"github.com/ffqa/xpier-xplan/internal/project"
 	"github.com/ffqa/xpier-xplan/internal/scanner"
 )
@@ -34,10 +35,12 @@ type Manager struct {
 	settings func() *config.Config
 	logger   *log.Logger
 
-	slots   chan struct{}
-	mu      sync.Mutex
-	cancels map[string]context.CancelFunc
-	baseCtx context.Context
+	slots     chan struct{}
+	mu        sync.Mutex
+	cancels   map[string]context.CancelFunc
+	testLocks map[string]*sync.Mutex
+	health    *HealthBook
+	baseCtx   context.Context
 }
 
 // NewManager creates a manager; settings is read at run time so config edits
@@ -47,13 +50,19 @@ func NewManager(ctx context.Context, store *project.Store, settings func() *conf
 	if slots < 1 {
 		slots = 1
 	}
+	health, err := LoadHealthBook(store.Home())
+	if err != nil {
+		logger.Printf("reviewer health unreadable, starting empty: %v", err)
+	}
 	return &Manager{
-		store:    store,
-		settings: settings,
-		logger:   logger,
-		slots:    make(chan struct{}, slots),
-		cancels:  map[string]context.CancelFunc{},
-		baseCtx:  ctx,
+		store:     store,
+		settings:  settings,
+		logger:    logger,
+		slots:     make(chan struct{}, slots),
+		cancels:   map[string]context.CancelFunc{},
+		testLocks: map[string]*sync.Mutex{},
+		health:    health,
+		baseCtx:   ctx,
 	}
 }
 
@@ -79,8 +88,12 @@ func (m *Manager) Enqueue(slug, kindID, question, trigger string) (*Job, error) 
 		return nil, fmt.Errorf("%w: a question is required", project.ErrInvalid)
 	}
 	reviewerName := m.ReviewerFor(target)
-	if _, ok := m.settings().Reviewers[reviewerName]; !ok {
+	if !m.settings().IsReviewer(reviewerName) {
 		return nil, fmt.Errorf("%w: reviewer %q is not configured", project.ErrInvalid, reviewerName)
+	}
+	requested := ""
+	if reviewerName == config.AutoReviewer {
+		requested = config.AutoReviewer
 	}
 
 	m.mu.Lock()
@@ -97,15 +110,17 @@ func (m *Manager) Enqueue(slug, kindID, question, trigger string) (*Job, error) 
 	}
 	now := time.Now().UTC()
 	job := &Job{
-		ID:        newJobID(now, kind.ID),
-		Project:   slug,
-		Kind:      kind.ID,
-		Question:  strings.TrimSpace(question),
-		Reviewer:  reviewerName,
-		Trigger:   trigger,
-		Status:    StatusQueued,
-		CreatedAt: now,
-		Findings:  []Finding{},
+		ID:       newJobID(now, kind.ID),
+		Project:  slug,
+		Kind:     kind.ID,
+		Question: strings.TrimSpace(question),
+		Reviewer: reviewerName,
+		Trigger:  trigger,
+
+		ReviewerRequested: requested,
+		Status:            StatusQueued,
+		CreatedAt:         now,
+		Findings:          []Finding{},
 	}
 	jobCtx, cancel := context.WithCancel(m.baseCtx)
 	m.cancels[job.ID] = cancel
@@ -149,22 +164,20 @@ func (m *Manager) run(ctx context.Context, target *project.Project, kind Kind, j
 		m.finish(job, func(j *Job) { j.Status = StatusFailed; j.Error = err.Error() })
 		return
 	}
-	def := m.settings().Reviewers[job.Reviewer]
-	argv, err := BuildArgv(def, prompt, promptFile, target.Path)
-	if err != nil {
-		m.finish(job, func(j *Job) { j.Status = StatusFailed; j.Error = err.Error() })
-		return
-	}
-
 	isRepo := scanner.IsRepo(target.Path)
 	fingerprintBefore := ""
 	if isRepo {
 		fingerprintBefore = scanner.StatusFingerprint(target.Path)
 	}
-	result := runAgent(ctx, argv, target.Path,
+	vars := ArgvVars{Prompt: prompt, PromptFile: promptFile, Path: target.Path, Home: m.store.Home()}
+	result, err := m.runWithReviewer(ctx, job, vars,
 		filepath.Join(reviewsDir, job.ID+".md"),
-		filepath.Join(reviewsDir, job.ID+".log"),
-		m.settings().ReviewDeadline())
+		filepath.Join(reviewsDir, job.ID+".log"))
+	if err != nil {
+		m.finish(job, func(j *Job) { j.Status = StatusFailed; j.Error = err.Error() })
+		m.logger.Printf("review end project=%s kind=%s id=%s status=%s reason=%q", job.Project, job.Kind, job.ID, job.Status, err)
+		return
+	}
 	treeChanged := isRepo && scanner.StatusFingerprint(target.Path) != fingerprintBefore
 
 	var draft draftOutcome
@@ -187,8 +200,8 @@ func (m *Manager) run(ctx context.Context, target *project.Project, kind Kind, j
 		if treeChanged {
 			j.Findings = append(j.Findings, Finding{
 				Severity: "info",
-				Title:    "Working tree changed while the review was running",
-				Detail:   "git status differs before and after the run. It may be your own parallel work, or the agent did not respect read-only mode. Check `git status` in the project.",
+				Title:    i18n.T("Working tree changed while the review was running"),
+				Detail:   i18n.T("git status differs before and after the run. It may be your own parallel work, or the agent did not respect read-only mode. Check `git status` in the project."),
 			})
 		}
 		switch {
@@ -209,7 +222,7 @@ func (m *Manager) run(ctx context.Context, target *project.Project, kind Kind, j
 			j.Summary = nonEmpty(draft.summary, j.Summary)
 			j.IntentWritten = draft.written
 			if kind.Review && !parsed {
-				j.Error = "report has no parsable JSON block; verdict unknown"
+				j.Error = i18n.T("report has no parsable JSON block; verdict unknown")
 			}
 		}
 	})
@@ -280,13 +293,13 @@ func (m *Manager) applyIntentDraft(target *project.Project, job *Job, output, re
 		return draftOutcome{}, err
 	}
 	if project.IntentFilled(current) {
-		return draftOutcome{summary: "Draft ready. Your intent was kept as it is; load the draft in the Intent tab to compare."}, nil
+		return draftOutcome{summary: i18n.T("Draft ready. Your intent was kept as it is; load the draft in the Intent tab to compare.")}, nil
 	}
 	if err := m.store.WriteIntent(target.Slug, draft); err != nil {
 		return draftOutcome{}, err
 	}
 	m.logger.Printf("intent draft written project=%s id=%s", target.Slug, job.ID)
-	return draftOutcome{summary: "Draft written to intent.md. Correct it in your own words, then delete the Draft line.", written: true}, nil
+	return draftOutcome{summary: i18n.T("Draft written to intent.md. Correct it in your own words, then delete the Draft line."), written: true}, nil
 }
 
 func nonEmpty(value, fallback string) string {
@@ -444,7 +457,7 @@ func (m *Manager) RecoverInterrupted() {
 		}
 		m.finish(job, func(j *Job) {
 			j.Status = StatusFailed
-			j.Error = "interrupted: xplan stopped while this review was running"
+			j.Error = i18n.T("interrupted: xplan stopped while this review was running")
 		})
 	}
 }

@@ -2,6 +2,8 @@
 // and stores the reports and parsed findings under the xplan home.
 package review
 
+import "github.com/ffqa/xpier-xplan/internal/i18n"
+
 // Kind describes one job type and the instructions given to the agent.
 // Review kinds end with a verdict and findings; the others (ask, intent)
 // produce free-form Markdown.
@@ -79,6 +81,26 @@ Rules:
 - The original motivation (earliest docs and commits) matters more than what the project has become. When the two differ, say so under Constraints.
 - Short bullet points from the owner's perspective. No marketing language.`,
 	},
+}
+
+// LocalizedKinds returns Kinds with titles and descriptions in the UI
+// language; Instructions (sent to agents) stay in English.
+func LocalizedKinds() []Kind {
+	localized := make([]Kind, len(Kinds))
+	for index, kind := range Kinds {
+		kind.Title = i18n.T(kind.Title)
+		kind.Description = i18n.T(kind.Description)
+		localized[index] = kind
+	}
+	return localized
+}
+
+// KindTitle returns the localized title of a kind, or its ID.
+func KindTitle(id string) string {
+	if kind, ok := KindByID(id); ok {
+		return i18n.T(kind.Title)
+	}
+	return id
 }
 
 // KindByID finds a kind definition.

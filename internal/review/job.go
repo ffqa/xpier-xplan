@@ -56,6 +56,10 @@ type Job struct {
 	// IntentWritten is set by intent drafts that filled an empty intent.md;
 	// false means the owner's intent was kept and the draft is the report.
 	IntentWritten bool `json:"intent_written,omitempty"`
+	// ReviewerRequested is "auto" when Reviewer was picked at run time.
+	ReviewerRequested string `json:"reviewer_requested,omitempty"`
+	// Attempts lists reviewers "auto" skipped, as "name: reason".
+	Attempts []string `json:"attempts,omitempty"`
 }
 
 // Active reports whether the job is still queued or running.

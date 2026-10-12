@@ -11,13 +11,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api } from "@/lib/api";
-import { ago } from "@/lib/format";
+import { ago, kindLabel, severityLabel } from "@/lib/format";
+import { t } from "@/lib/i18n";
 import { useQuery } from "@/lib/query";
 import { routeHref } from "@/lib/route";
-import type { InboxItem } from "@/lib/types";
+import type { InboxItem, Severity } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const severities = ["critical", "high", "medium", "low", "info"];
+const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
+
+function atOrAbove(severity: string) {
+  const label = severities.includes(severity as Severity)
+    ? severityLabel(severity as Severity)
+    : severity;
+  return t("{severity} and above", { severity: label });
+}
 
 /** Findings from the latest finished review of every kind, across projects. */
 export function InboxView() {
@@ -51,10 +59,11 @@ export function InboxView() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
-        <h1 className="font-semibold">Inbox</h1>
+        <h1 className="font-semibold">{t("Inbox")}</h1>
         <span className="text-xs text-muted-foreground">
-          Findings from the latest review of each kind. Re-running a review
-          replaces its findings.
+          {t(
+            "Findings from the latest review of each kind. Re-running a review replaces its findings.",
+          )}
         </span>
         <div className="ml-auto flex items-center gap-2">
           <Select
@@ -65,13 +74,13 @@ export function InboxView() {
               <SelectValue>
                 {(value: string) =>
                   value === "all"
-                    ? "All projects"
+                    ? t("All projects")
                     : (projects.find(([slug]) => slug === value)?.[1] ?? value)
                 }
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All projects</SelectItem>
+              <SelectItem value="all">{t("All projects")}</SelectItem>
               {projects.map(([slug, name]) => (
                 <SelectItem key={slug} value={slug}>
                   {name}
@@ -84,14 +93,12 @@ export function InboxView() {
             onValueChange={(value) => changeMinimum(String(value))}
           >
             <SelectTrigger size="sm" className="min-w-32">
-              <SelectValue>
-                {(value: string) => `${value} and above`}
-              </SelectValue>
+              <SelectValue>{(value: string) => atOrAbove(value)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {severities.map((severity) => (
                 <SelectItem key={severity} value={severity}>
-                  {severity} and above
+                  {atOrAbove(severity)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -103,9 +110,14 @@ export function InboxView() {
         {inbox.error && !inbox.data && <ErrorBlock error={inbox.error} />}
         {!inbox.data && !inbox.error && <LoadingBlock />}
         {inbox.data && visible.length === 0 && (
-          <Empty icon={<InboxIcon />} title="Inbox zero" className="h-full">
-            Nothing at this severity. Reviews run on each project&apos;s
-            schedule, or start one from a project&apos;s Reviews tab.
+          <Empty
+            icon={<InboxIcon />}
+            title={t("Inbox zero")}
+            className="h-full"
+          >
+            {t(
+              "Nothing at this severity. Reviews run on each project's schedule, or start one from a project's Reviews tab.",
+            )}
           </Empty>
         )}
         <ul className="divide-y">
@@ -158,7 +170,9 @@ function InboxRow({ item }: { item: InboxItem }) {
           )}
           {finding.suggestion && (
             <p className="whitespace-pre-wrap text-muted-foreground">
-              <span className="font-medium text-foreground">Suggestion: </span>
+              <span className="font-medium text-foreground">
+                {t("Suggestion:")}{" "}
+              </span>
               {finding.suggestion}
             </p>
           )}
@@ -171,7 +185,7 @@ function InboxRow({ item }: { item: InboxItem }) {
             })}
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
           >
-            Open the full {item.kind} report{" "}
+            {t("Open the full {kind} report", { kind: kindLabel(item.kind) })}{" "}
             <ArrowRightIcon className="size-3" />
           </a>
         </div>

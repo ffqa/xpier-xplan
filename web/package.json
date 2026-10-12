@@ -1,12 +1,13 @@
 {
   "name": "xplan-web",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",
+    "i18n:check": "node scripts/check-i18n.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

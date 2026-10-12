@@ -13,20 +13,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import { invalidate } from "@/lib/query";
+import { AUTO_REVIEWER, reviewerLabel } from "@/lib/reviewers";
 import { navigate } from "@/lib/route";
 import type { Brief, Project } from "@/lib/types";
 import { refreshProject, useMeta } from "@/lib/ui-state";
-import { ScheduleRow } from "@/views/settings-view";
+import { ReviewerSelect, ScheduleRow } from "@/views/settings-view";
 
 interface Draft {
   name: string;
@@ -85,7 +80,7 @@ export function ProjectSettingsTab({
         schedule: draft.schedule,
         doc_globs: splitList(draft.doc_globs, /\n/),
       });
-      toast.success("Project settings saved");
+      toast.success(t("Project settings saved"));
       refreshProject(slug);
     } catch (error) {
       toast.error((error as Error).message);
@@ -98,7 +93,9 @@ export function ProjectSettingsTab({
     try {
       await api.removeProject(slug);
       toast.success(
-        `${brief.card.name} unregistered. Its notes were moved to the archive folder.`,
+        t("{name} unregistered. Its notes were moved to the archive folder.", {
+          name: brief.card.name,
+        }),
       );
       invalidate("overview");
       navigate({ view: "home" });
@@ -108,15 +105,16 @@ export function ProjectSettingsTab({
   };
 
   const reviewers = meta.data?.reviewers ?? [];
-  const defaultReviewer = meta.data?.default_reviewer ?? "cursor-agent";
+  const defaultReviewer = meta.data?.default_reviewer ?? AUTO_REVIEWER;
 
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl space-y-4 p-5">
         <div className="flex items-center">
           <p className="text-[13px] text-muted-foreground">
-            Settings for this project only. Empty values fall back to the global
-            settings.
+            {t(
+              "Settings for this project only. Empty values fall back to the global settings.",
+            )}
           </p>
           <Button
             className="ml-auto"
@@ -124,24 +122,26 @@ export function ProjectSettingsTab({
             onClick={() => void save()}
           >
             {saving && <Loader2Icon className="animate-spin" />}
-            Save
+            {t("Save")}
           </Button>
         </div>
 
-        <Section title="General">
+        <Section title={t("General")}>
           <div className="grid grid-cols-[160px_1fr] items-center gap-x-4 gap-y-3">
-            <span className="text-[13px]">Name</span>
+            <span className="text-[13px]">{t("Name")}</span>
             <Input
               value={draft.name}
               onChange={(event) => set("name", event.target.value)}
             />
-            <span className="self-start pt-1.5 text-[13px]">Summary</span>
+            <span className="self-start pt-1.5 text-[13px]">
+              {t("Summary")}
+            </span>
             <Textarea
               value={draft.summary}
               onChange={(event) => set("summary", event.target.value)}
               rows={2}
             />
-            <span className="text-[13px]">Tags</span>
+            <span className="text-[13px]">{t("Tags")}</span>
             <Input
               value={draft.tags}
               onChange={(event) => set("tags", event.target.value)}
@@ -150,40 +150,17 @@ export function ProjectSettingsTab({
           </div>
         </Section>
 
-        <Section title="Reviews">
+        <Section title={t("Reviews")}>
           <div className="grid grid-cols-[160px_1fr] items-center gap-x-4 gap-y-2">
-            <span className="text-[13px]">Reviewer</span>
-            <Select
-              value={draft.reviewer || "__default"}
-              onValueChange={(value) =>
-                set("reviewer", value === "__default" ? "" : String(value))
-              }
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue>
-                  {(value: string) =>
-                    value === "__default"
-                      ? `Default (${defaultReviewer})`
-                      : value
-                  }
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__default">
-                  Default ({defaultReviewer})
-                </SelectItem>
-                {reviewers.map((reviewer) => (
-                  <SelectItem key={reviewer.name} value={reviewer.name}>
-                    {reviewer.name}
-                    {!reviewer.installed && (
-                      <span className="text-xs text-muted-foreground">
-                        (not installed)
-                      </span>
-                    )}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <span className="text-[13px]">{t("Reviewer")}</span>
+            <ReviewerSelect
+              value={draft.reviewer}
+              reviewers={reviewers}
+              onChange={(value) => set("reviewer", value)}
+              inherit={t("Default ({reviewer})", {
+                reviewer: reviewerLabel(defaultReviewer, meta.data),
+              })}
+            />
             {(meta.data?.scheduled_kinds ?? []).map((kind) => (
               <ScheduleRow
                 key={kind}
@@ -198,7 +175,7 @@ export function ProjectSettingsTab({
           </div>
         </Section>
 
-        <Section title="Extra doc globs">
+        <Section title={t("Extra doc globs")}>
           <Textarea
             value={draft.doc_globs}
             onChange={(event) => set("doc_globs", event.target.value)}
@@ -207,16 +184,18 @@ export function ProjectSettingsTab({
             className="font-mono text-[12px]"
           />
           <p className="mt-2 text-xs text-muted-foreground">
-            One glob per line, relative to the project root. Added on top of the
-            built-in doc detection.
+            {t(
+              "One glob per line, relative to the project root. Added on top of the built-in doc detection.",
+            )}
           </p>
         </Section>
 
-        <Section title="Danger zone" className="border-crit/30">
+        <Section title={t("Danger zone")} className="border-crit/30">
           <div className="flex items-center gap-3">
             <p className="text-[13px] text-muted-foreground">
-              Unregister removes the project from xplan. The project folder is
-              untouched; xplan&apos;s notes move to the archive folder.
+              {t(
+                "Unregister removes the project from xplan. The project folder is untouched; xplan's notes move to the archive folder.",
+              )}
             </p>
             <Button
               variant="destructive"
@@ -225,7 +204,7 @@ export function ProjectSettingsTab({
               onClick={() => setConfirmRemove(true)}
             >
               <Trash2Icon />
-              Unregister
+              {t("Unregister")}
             </Button>
           </div>
         </Section>
@@ -234,18 +213,21 @@ export function ProjectSettingsTab({
       <Dialog open={confirmRemove} onOpenChange={setConfirmRemove}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Unregister {brief.card.name}?</DialogTitle>
+            <DialogTitle>
+              {t("Unregister {name}?", { name: brief.card.name })}
+            </DialogTitle>
             <DialogDescription>
-              The code is not touched. Intent, decisions, journal and reviews
-              are archived, not deleted.
+              {t(
+                "The code is not touched. Intent, decisions, journal and reviews are archived, not deleted.",
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirmRemove(false)}>
-              Keep it
+              {t("Keep it")}
             </Button>
             <Button variant="destructive" onClick={() => void remove()}>
-              Unregister
+              {t("Unregister")}
             </Button>
           </DialogFooter>
         </DialogContent>

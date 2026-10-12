@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ffqa/xpier-xplan/internal/app"
@@ -18,37 +19,97 @@ import (
 )
 
 type reviewerInfo struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Command     []string `json:"command"`
-	Installed   bool     `json:"installed"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Command     []string               `json:"command"`
+	Installed   bool                   `json:"installed"`
+	Health      *review.ReviewerHealth `json:"health,omitempty"`
+	HealthLabel string                 `json:"health_label,omitempty"`
+}
+
+type autoChoice struct {
+	Name     string `json:"name"`
+	Verified bool   `json:"verified"`
 }
 
 func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 	cfg := s.app.Config()
-	reviewers := []reviewerInfo{}
-	for _, name := range cfg.ReviewerNames() {
-		def := cfg.Reviewers[name]
-		installed := false
-		if len(def.Command) > 0 {
-			_, err := review.LookupAgent(def.Command[0])
-			installed = err == nil
-		}
-		reviewers = append(reviewers, reviewerInfo{Name: name, Description: def.Description, Command: def.Command, Installed: installed})
-	}
+	autoName, autoVerified := s.app.Reviews.AutoChoice()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"version":          app.Version,
 		"home":             s.app.Home,
 		"statuses":         project.Statuses,
 		"scheduled_kinds":  project.ScheduledKinds,
 		"schedule_values":  project.ScheduleValues,
-		"review_kinds":     review.Kinds,
+		"review_kinds":     review.LocalizedKinds(),
 		"doc_kinds":        scanner.DocKinds,
-		"reviewers":        reviewers,
+		"reviewers":        s.reviewerInfos(cfg),
 		"default_reviewer": cfg.DefaultReviewer,
+		"reviewer_order":   cfg.AutoCandidates(),
+		"auto_choice":      autoChoice{Name: autoName, Verified: autoVerified},
+		"language":         cfg.Language,
 		"report_language":  cfg.ReportLanguage,
-		"commands":         console.Commands,
+		"commands":         console.LocalizedCommands(),
 	})
+}
+
+// reviewerInfos lists presets in auto-pick order with install and health state.
+func (s *Server) reviewerInfos(cfg *config.Config) []reviewerInfo {
+	healthByName := s.app.Reviews.ReviewerHealth()
+	reviewers := []reviewerInfo{}
+	for _, name := range cfg.AutoCandidates() {
+		def := cfg.Reviewers[name]
+		installed := false
+		if len(def.Command) > 0 {
+			_, err := review.LookupAgent(def.Command[0])
+			installed = err == nil
+		}
+		info := reviewerInfo{Name: name, Description: def.Description, Command: def.Command, Installed: installed}
+		if health, ok := healthByName[name]; ok {
+			info.Health = &health
+			info.HealthLabel = review.HealthLabel(health.Status)
+		}
+		reviewers = append(reviewers, info)
+	}
+	return reviewers
+}
+
+// handleTestReviewer runs the smoke test for one preset (up to two minutes).
+func (s *Server) handleTestReviewer(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	health, err := s.app.Reviews.TestReviewer(r.Context(), name)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"name": name, "health": health, "health_label": review.HealthLabel(health.Status)})
+}
+
+// handleTestReviewers smoke-tests every installed preset in parallel.
+func (s *Server) handleTestReviewers(w http.ResponseWriter, r *http.Request) {
+	cfg := s.app.Config()
+	results := map[string]review.ReviewerHealth{}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, info := range s.reviewerInfos(cfg) {
+		if !info.Installed {
+			continue
+		}
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			health, err := s.app.Reviews.TestReviewer(r.Context(), name)
+			if err != nil {
+				s.logger.Printf("reviewer test failed name=%s: %v", name, err)
+				return
+			}
+			mu.Lock()
+			results[name] = health
+			mu.Unlock()
+		}(info.Name)
+	}
+	wg.Wait()
+	writeJSON(w, http.StatusOK, map[string]any{"results": results, "reviewers": s.reviewerInfos(cfg)})
 }
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +118,8 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 
 type configPatch struct {
 	DefaultReviewer      *string           `json:"default_reviewer"`
+	ReviewerOrder        []string          `json:"reviewer_order"`
+	Language             *string           `json:"language"`
 	ReportLanguage       *string           `json:"report_language"`
 	ScanInterval         *string           `json:"scan_interval"`
 	ReviewTimeout        *string           `json:"review_timeout"`
@@ -73,6 +136,12 @@ func (s *Server) handlePatchConfig(w http.ResponseWriter, r *http.Request) {
 	updated, err := s.app.UpdateConfig(func(cfg *config.Config) error {
 		if patch.DefaultReviewer != nil {
 			cfg.DefaultReviewer = strings.TrimSpace(*patch.DefaultReviewer)
+		}
+		if patch.ReviewerOrder != nil {
+			cfg.ReviewerOrder = patch.ReviewerOrder
+		}
+		if patch.Language != nil {
+			cfg.Language = strings.TrimSpace(*patch.Language)
 		}
 		if patch.ReportLanguage != nil {
 			cfg.ReportLanguage = strings.TrimSpace(*patch.ReportLanguage)
@@ -220,7 +289,7 @@ func (s *Server) handlePatchProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if patch.Reviewer != nil && *patch.Reviewer != "" {
-		if _, ok := s.app.Config().Reviewers[*patch.Reviewer]; !ok {
+		if !s.app.Config().IsReviewer(*patch.Reviewer) {
 			s.writeError(w, fmt.Errorf("%w: reviewer %q is not configured", project.ErrInvalid, *patch.Reviewer))
 			return
 		}

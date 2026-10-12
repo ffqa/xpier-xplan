@@ -31,7 +31,9 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tip } from "@/components/ui/tooltip";
 import { ApiError, api } from "@/lib/api";
-import { statusHint, statusLabel } from "@/lib/format";
+import { kindLabel, statusHint, statusLabel } from "@/lib/format";
+import { t, tn } from "@/lib/i18n";
+import { jobReviewer } from "@/lib/reviewers";
 import { invalidate, useQuery } from "@/lib/query";
 import { navigate, PROJECT_TABS, type ProjectTab } from "@/lib/route";
 import type { Brief, Status } from "@/lib/types";
@@ -73,12 +75,12 @@ export function ProjectView({
       return (
         <Empty
           icon={<FolderXIcon />}
-          title="Project not found"
+          title={t("Project not found")}
           className="h-full"
         >
-          It may have been unregistered.{" "}
+          {t("It may have been unregistered.")}{" "}
           <a href="#/" className="text-primary hover:underline">
-            Back to overview
+            {t("Back to overview")}
           </a>
         </Empty>
       );
@@ -103,7 +105,7 @@ export function ProjectView({
             return (
               <TabsTrigger key={id} value={id}>
                 <Icon />
-                {tabMeta[id].label}
+                {t(tabMeta[id].label)}
                 <TabBadge id={id} brief={brief.data!} />
               </TabsTrigger>
             );
@@ -151,7 +153,7 @@ function TabBadge({ id, brief }: { id: ProjectTab; brief: Brief }) {
     return (
       <span
         className="size-1.5 rounded-full bg-warn"
-        title="Intent not written yet"
+        title={t("Intent not written yet")}
       />
     );
   if (id === "reviews" && brief.active_reviews.length > 0)
@@ -180,7 +182,7 @@ function ProjectHeader({ brief }: { brief: Brief }) {
   const setStatus = async (status: Status) => {
     try {
       await api.patchProject(slug, { status });
-      toast.success(`Moved to ${statusLabel[status]}`);
+      toast.success(t("Moved to {status}", { status: statusLabel[status] }));
       refreshProject(slug);
     } catch (error) {
       toast.error((error as Error).message);
@@ -190,7 +192,14 @@ function ProjectHeader({ brief }: { brief: Brief }) {
   const rescan = async () => {
     try {
       const result = await api.scan(slug);
-      toast.success(`Scanned ${result.docs} docs in ${result.duration_ms}ms`);
+      toast.success(
+        tn(
+          result.docs,
+          "Scanned {count} doc in {ms}ms",
+          "Scanned {count} docs in {ms}ms",
+          { ms: result.duration_ms },
+        ),
+      );
       refreshProject(slug);
     } catch (error) {
       toast.error((error as Error).message);
@@ -211,7 +220,12 @@ function ProjectHeader({ brief }: { brief: Brief }) {
   const startReview = async (kind: string) => {
     try {
       const job = await api.startReview(slug, kind);
-      toast.success(`${kind} review queued with ${job.reviewer}`);
+      toast.success(
+        t("{kind} review queued with {reviewer}", {
+          kind: kindLabel(kind),
+          reviewer: jobReviewer(job),
+        }),
+      );
       refreshProject(slug);
       invalidate("overview");
       navigate({ view: "project", slug, tab: "reviews", arg: job.id });
@@ -222,15 +236,15 @@ function ProjectHeader({ brief }: { brief: Brief }) {
 
   const copyPath = () => {
     navigator.clipboard.writeText(card.path).then(
-      () => toast.success("Path copied"),
-      () => toast.error("Clipboard unavailable"),
+      () => toast.success(t("Path copied")),
+      () => toast.error(t("Clipboard unavailable")),
     );
   };
 
   return (
     <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2.5">
       <div className="flex min-w-0 items-center gap-2">
-        <Tip label={card.health[0]?.message ?? "Healthy"} side="bottom">
+        <Tip label={card.health[0]?.message ?? t("Healthy")} side="bottom">
           <span className="inline-flex">
             <HealthDot level={card.health_level} className="size-2.5" />
           </span>
@@ -264,7 +278,7 @@ function ProjectHeader({ brief }: { brief: Brief }) {
       <button
         type="button"
         onClick={copyPath}
-        title="Copy path"
+        title={t("Copy path")}
         className="flex min-w-0 items-center gap-1 font-mono text-[11.5px] text-muted-foreground hover:text-foreground"
       >
         <span className="truncate">{card.path}</span>
@@ -280,7 +294,7 @@ function ProjectHeader({ brief }: { brief: Brief }) {
       </div>
 
       <div className="ml-auto flex items-center gap-1">
-        <Tip label="Open in Cursor" side="bottom">
+        <Tip label={t("Open in Cursor")} side="bottom">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -289,19 +303,19 @@ function ProjectHeader({ brief }: { brief: Brief }) {
             <ExternalLinkIcon />
           </Button>
         </Tip>
-        <Tip label="Rescan docs, git and progress" side="bottom">
+        <Tip label={t("Rescan docs, git and progress")} side="bottom">
           <Button variant="ghost" size="icon-sm" onClick={() => void rescan()}>
             <RefreshCwIcon />
           </Button>
         </Tip>
         <Button variant="outline" size="sm" onClick={() => ui.openPark(slug)}>
           <SquareParkingIcon />
-          Park
+          {t("Park")}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button size="sm" />}>
             <PlayIcon />
-            Review
+            {t("Review")}
             <ChevronDownIcon className="size-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
@@ -324,7 +338,7 @@ function ProjectHeader({ brief }: { brief: Brief }) {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => ui.seedConsole("")}>
               <KindIcon kind="ask" />
-              Ask a question in the console
+              {t("Ask a question in the console")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

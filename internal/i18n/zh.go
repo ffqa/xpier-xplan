@@ -1,0 +1,102 @@
+package i18n
+
+// zh is the Simplified Chinese catalog, keyed by the English format string.
+// Keep the verbs (%s, %d) in the same order as the English key.
+var zh = map[string]string{
+	// Health flags.
+	"Not scanned yet":              "尚未扫描",
+	"Project directory is missing": "项目目录不存在",
+	"Intent not written yet — why does this project exist?":               "还没写初衷——这个项目为什么存在？",
+	"Intent is an agent's draft — correct it, then delete the Draft line": "初衷是 AI 起草的草稿——改成你自己的话，再删掉 Draft 那一行",
+	"Not a git repository":                                         "不是 git 仓库",
+	"Marked active but no commit for %d days":                      "标记为进行中，但已经 %d 天没有提交",
+	"%d uncommitted files":                                         "%d 个未提交的文件",
+	"%d xteam slices in flight":                                    "%d 个 xteam 任务进行中",
+	"No park note — write where you stopped before switching away": "没有停靠便签——切走之前写一句停在哪",
+	"critical findings":                                            "有严重问题",
+	"needs attention":                                              "需要关注",
+	"%s: last scheduled run failed":                                "%s：上次定时评审失败",
+
+	// Review kinds (titles and descriptions only; agent instructions stay English).
+	"Drift check":     "偏离检查",
+	"Code review":     "代码评审",
+	"Security review": "安全评审",
+	"Deploy review":   "部署评审",
+	"Test review":     "测试评审",
+	"Question":        "提问",
+	"Intent draft":    "初衷草稿",
+	"Is recent work still serving the original intent? Detects scope creep and ideas leaking in from other projects.": "最近的工作还在服务最初的初衷吗？发现范围蔓延，以及从其他项目串进来的想法。",
+	"Architecture, maintainability, error handling and hotspots.":                                                     "架构、可维护性、错误处理和热点代码。",
+	"Secrets, injection, auth gaps, insecure defaults, risky dependencies.":                                           "密钥泄露、注入、鉴权缺口、不安全的默认值、有风险的依赖。",
+	"Build, release and operations readiness.":                                                                        "构建、发布和运维是否就绪。",
+	"What is covered, what is not, and whether the tests can fail.":                                                   "哪些覆盖了、哪些没有，以及测试是否真的会失败。",
+	"Ask a read-only agent anything about the project.":                                                               "向只读的 AI 询问关于项目的任何问题。",
+	"Reconstruct why an existing project was started, from its README, docs and git history, for you to correct.":     "根据 README、文档和 git 历史，还原一个老项目当初为什么开始，交给你修改。",
+
+	// Reviewers.
+	"working":                       "可用",
+	"needs login or subscription":   "需要登录或订阅",
+	"not installed":                 "未安装",
+	"timed out":                     "超时",
+	"failed":                        "失败",
+	"not configured":                "未配置",
+	"unexpected answer: %s":         "回答不符合预期：%s",
+	"auto (first working reviewer)": "auto（第一个可用的评审工具）",
+	"No working reviewer (%s). Open Settings → Reviewers to test them, or log in to one.": "没有可用的评审工具（%s）。打开 设置 → 评审工具 测试一下，或登录其中一个。",
+
+	// Review jobs.
+	"Working tree changed while the review was running": "评审运行期间工作区发生了变化",
+	"git status differs before and after the run. It may be your own parallel work, or the agent did not respect read-only mode. Check `git status` in the project.": "运行前后 git status 不一致。可能是你自己同时在改，也可能是 AI 没有遵守只读模式。请在项目里检查 `git status`。",
+	"report has no parsable JSON block; verdict unknown":                                       "报告里没有可解析的 JSON 块，结论未知",
+	"Draft ready. Your intent was kept as it is; load the draft in the Intent tab to compare.": "草稿已就绪。你写的初衷保持不变；可以在「初衷」标签里载入草稿对比。",
+	"Draft written to intent.md. Correct it in your own words, then delete the Draft line.":    "草稿已写入 intent.md。用你自己的话修改，然后删掉 Draft 那一行。",
+	"interrupted: xplan stopped while this review was running":                                 "已中断：评审运行时 xplan 停止了",
+
+	// Bulk intent drafts.
+	"intent already written": "初衷已经写过",
+	"started together with its xplan entry: write this one yourself": "和 xplan 登记同时开始的新项目：请自己写初衷",
+	"a draft is already running":                                     "已有草稿在运行",
+
+	// Console commands.
+	"Run a read-only external review":                                          "运行一次只读的外部评审",
+	"Ask the reviewer agent about this project (plain text does the same)":     "向评审工具提问（直接输入文字也一样）",
+	"Leave a park note before switching away":                                  "切走之前留一张停靠便签",
+	"Add a note to the journal":                                                "在日志里记一笔",
+	"Create a decision record":                                                 "新建一条决策记录",
+	"Let the reviewer reconstruct the intent from history, for you to correct": "让评审工具根据历史还原初衷，交给你修改",
+	"Move the project on the board":                                            "在看板上移动项目",
+	"Rescan docs, git and progress now":                                        "立即重新扫描文档、git 和进度",
+	"Mark everything as seen":                                                  "全部标记为已看完",
+	"Ring the project's xteam PM, or show xteam status":                        "呼叫项目的 xteam PM，或查看 xteam 状态",
+	"Open the project in Cursor":                                               "在 Cursor 中打开项目",
+	"List commands":                                                            "列出所有命令",
+	"<question>":                                                               "<问题>",
+	"<where you stopped> [| next step] [| open questions]":                     "<停在哪> [| 下一步] [| 待解决的问题]",
+	"<text>":             "<内容>",
+	"<title>":            "<标题>",
+	"<message> | status": "<消息> | status",
+
+	// Console replies.
+	"Plain text asks the reviewer agent (read-only). Commands:": "直接输入文字即向评审工具提问（只读）。命令：",
+	"Marked as caught up.":                                        "已标记为看完。",
+	"Unknown command %s. Type /help.":                             "未知命令 %s。输入 /help 查看。",
+	"Usage: /ask <question>":                                      "用法：/ask <问题>",
+	"Asked %s (read-only). The answer will appear here.":          "已向 %s 提问（只读）。回答会显示在这里。",
+	"Usage: /review <drift|code|security|deploy|test|all>":        "用法：/review <drift|code|security|deploy|test|all>",
+	"%s: not a review kind (drift, code, security, deploy, test)": "%s：不是评审类型（drift、code、security、deploy、test）",
+	"%s: already running (%s)":                                    "%s：已在运行（%s）",
+	"%s: queued with %s (%s)":                                     "%s：已排队，使用 %s（%s）",
+	"An intent draft is already running (%s).":                    "已有初衷草稿在运行（%s）。",
+	"Drafting the intent with %s (read-only). An empty intent.md is filled in; a written one is kept and the draft waits in the Intent tab.": "正在用 %s 起草初衷（只读）。空的 intent.md 会被填入；已写过的保持不变，草稿放在「初衷」标签里等你查看。",
+	"Usage: /park <where you stopped> | <next step> | <open questions>":                                                                      "用法：/park <停在哪> | <下一步> | <待解决的问题>",
+	"Parked. Next time you open this project you will see this first.":                                                                       "已停靠。下次打开这个项目，你会先看到这条便签。",
+	"Noted.": "已记录。",
+	"Created %s. Fill in the decision in the Decisions tab.": "已创建 %s。请在「决策」标签里填写内容。",
+	"Status set to %s.":                                               "状态已设为 %s。",
+	"Scanned in %dms: %d docs, checklist %d/%d.":                      "扫描用时 %dms：%d 个文档，清单 %d/%d。",
+	"This project has no .xteam directory; xteam is not set up here.": "这个项目没有 .xteam 目录，还没有配置 xteam。",
+	"Usage: /xteam <message for pm>  or  /xteam status":               "用法：/xteam <给 pm 的消息>  或  /xteam status",
+	"Delivered to xteam pm.":                                          "已送达 xteam pm。",
+	"Opened in Cursor.":                                               "已在 Cursor 中打开。",
+	"Opened in Finder.":                                               "已在访达中打开。",
+}

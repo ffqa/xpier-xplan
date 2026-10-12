@@ -14,7 +14,8 @@ import { ParkForm } from "@/components/park-dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
-import { ago, dateTime } from "@/lib/format";
+import { dateTime, timeAgo } from "@/lib/format";
+import { t } from "@/lib/i18n";
 import { invalidate, useQuery } from "@/lib/query";
 import type { Entry } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -26,8 +27,19 @@ const kindIcon = {
   system: BotIcon,
 };
 
+const entryKindLabel: Record<string, string> = {
+  park: "Park",
+  note: "Note",
+  command: "Command",
+  system: "System",
+};
+
 const filters = ["all", "park", "note", "command", "system"] as const;
 type Filter = (typeof filters)[number];
+
+function filterLabel(filter: Filter) {
+  return filter === "all" ? t("All") : t(entryKindLabel[filter]);
+}
 
 /** Park notes, free notes and console actions, newest first. */
 export function JournalTab({ slug }: { slug: string }) {
@@ -41,13 +53,13 @@ export function JournalTab({ slug }: { slug: string }) {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto grid max-w-6xl gap-4 p-4 lg:grid-cols-[360px_minmax(0,1fr)]">
         <div className="space-y-4">
-          <Section title="Park" icon={<SquareParkingIcon />}>
+          <Section title={t("Park")} icon={<SquareParkingIcon />}>
             <ParkForm slug={slug} compact />
           </Section>
           <NoteForm slug={slug} />
         </div>
         <Section
-          title="Timeline"
+          title={t("Timeline")}
           icon={<NotebookPenIcon />}
           actions={
             <div className="flex rounded-md border p-0.5">
@@ -61,7 +73,7 @@ export function JournalTab({ slug }: { slug: string }) {
                     filter === item && "bg-accent text-foreground",
                   )}
                 >
-                  {item}
+                  {filterLabel(item)}
                 </button>
               ))}
             </div>
@@ -72,7 +84,9 @@ export function JournalTab({ slug }: { slug: string }) {
           )}
           {!journal.data && !journal.error && <LoadingBlock />}
           {journal.data && entries.length === 0 && (
-            <p className="text-xs text-muted-foreground">Nothing here yet.</p>
+            <p className="text-xs text-muted-foreground">
+              {t("Nothing here yet.")}
+            </p>
           )}
           <ol className="relative space-y-3 before:absolute before:top-1 before:bottom-1 before:left-[9px] before:w-px before:bg-border">
             {entries.map((entry) => (
@@ -99,8 +113,12 @@ function TimelineEntry({ entry }: { entry: Entry }) {
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 text-[11px] text-muted-foreground">
-          <span className="capitalize">{entry.kind}</span>
-          <span title={dateTime(entry.at)}>{ago(entry.at)} ago</span>
+          <span className="capitalize">
+            {entryKindLabel[entry.kind]
+              ? t(entryKindLabel[entry.kind])
+              : entry.kind}
+          </span>
+          <span title={dateTime(entry.at)}>{timeAgo(entry.at)}</span>
           {entry.head && (
             <code className="font-mono">{entry.head.slice(0, 8)}</code>
           )}
@@ -108,10 +126,10 @@ function TimelineEntry({ entry }: { entry: Entry }) {
         {entry.kind === "park" ? (
           <dl className="mt-0.5 space-y-0.5 text-[13px]">
             {entry.stopped && (
-              <ParkField label="Stopped" value={entry.stopped} />
+              <ParkField label={t("Stopped")} value={entry.stopped} />
             )}
-            {entry.next && <ParkField label="Next" value={entry.next} />}
-            {entry.open && <ParkField label="Open" value={entry.open} />}
+            {entry.next && <ParkField label={t("Next")} value={entry.next} />}
+            {entry.open && <ParkField label={t("Open")} value={entry.open} />}
           </dl>
         ) : (
           <p className="mt-0.5 text-[13px] whitespace-pre-wrap">{entry.text}</p>
@@ -147,7 +165,7 @@ function NoteForm({ slug }: { slug: string }) {
     }
   };
   return (
-    <Section title="Quick note" icon={<StickyNoteIcon />}>
+    <Section title={t("Quick note")} icon={<StickyNoteIcon />}>
       <Textarea
         value={text}
         onChange={(event) => setText(event.target.value)}
@@ -157,7 +175,9 @@ function NoteForm({ slug }: { slug: string }) {
             void save();
           }
         }}
-        placeholder="An idea, a gotcha, a link — anything you would otherwise forget."
+        placeholder={t(
+          "An idea, a gotcha, a link — anything you would otherwise forget.",
+        )}
         rows={3}
       />
       <div className="mt-2 flex justify-end">
@@ -168,7 +188,7 @@ function NoteForm({ slug }: { slug: string }) {
           onClick={() => void save()}
         >
           {busy && <Loader2Icon className="animate-spin" />}
-          Add note
+          {t("Add note")}
         </Button>
       </div>
     </Section>

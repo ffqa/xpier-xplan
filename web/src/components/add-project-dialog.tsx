@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/misc";
 import { api } from "@/lib/api";
+import { t, tn } from "@/lib/i18n";
 import { invalidate } from "@/lib/query";
 import { navigate } from "@/lib/route";
 import { useOverview, useUI } from "@/lib/ui-state";
@@ -47,7 +48,10 @@ function AddProjectForm({ close }: { close: () => void }) {
     try {
       const created = await api.addProject(path.trim(), name.trim());
       toast.success(
-        `Registered ${created.name}. Write its intent first — it is what xplan reviews against.`,
+        t(
+          "Registered {name}. Write its intent first — it is what xplan reviews against.",
+          { name: created.name },
+        ),
       );
       invalidate("overview");
       close();
@@ -86,7 +90,14 @@ function AddProjectForm({ close }: { close: () => void }) {
     setBusy(false);
     invalidate("overview");
     if (failures.length) toast.error(failures.join("\n"));
-    else toast.success(`Registered ${picked.size} projects`);
+    else
+      toast.success(
+        tn(
+          picked.size,
+          "Registered {count} project",
+          "Registered {count} projects",
+        ),
+      );
     close();
   };
 
@@ -100,10 +111,11 @@ function AddProjectForm({ close }: { close: () => void }) {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Register a project</DialogTitle>
+        <DialogTitle>{t("Register a project")}</DialogTitle>
         <DialogDescription>
-          xplan only reads the project folder. Its own notes live in ~/.xplan,
-          never inside the project.
+          {t(
+            "xplan only reads the project folder. Its own notes live in ~/.xplan, never inside the project.",
+          )}
         </DialogDescription>
       </DialogHeader>
 
@@ -115,7 +127,7 @@ function AddProjectForm({ close }: { close: () => void }) {
         }}
       >
         <label className="text-xs font-medium text-muted-foreground">
-          Project folder
+          {t("Project folder")}
         </label>
         <Input
           autoFocus
@@ -127,11 +139,11 @@ function AddProjectForm({ close }: { close: () => void }) {
           <Input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Display name (optional)"
+            placeholder={t("Display name (optional)")}
           />
           <Button type="submit" disabled={busy || !path.trim()}>
             {busy && <Loader2Icon className="animate-spin" />}
-            Register
+            {t("Register")}
           </Button>
         </div>
       </form>
@@ -140,7 +152,7 @@ function AddProjectForm({ close }: { close: () => void }) {
 
       <div className="grid gap-2">
         <label className="text-xs font-medium text-muted-foreground">
-          Or discover git repositories in a folder
+          {t("Or discover git repositories in a folder")}
         </label>
         <div className="flex gap-2">
           <Input
@@ -154,12 +166,12 @@ function AddProjectForm({ close }: { close: () => void }) {
             disabled={busy || !root.trim()}
           >
             <FolderSearchIcon />
-            Discover
+            {t("Discover")}
           </Button>
         </div>
         {candidates && candidates.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            No unregistered git repositories found there.
+            {t("No unregistered git repositories found there.")}
           </p>
         )}
         {candidates && candidates.length > 0 && (
@@ -188,7 +200,7 @@ function AddProjectForm({ close }: { close: () => void }) {
             disabled={busy || picked.size === 0}
           >
             {busy && <Loader2Icon className="animate-spin" />}
-            Register {picked.size} selected
+            {t("Register {count} selected", { count: picked.size })}
           </Button>
         </DialogFooter>
       )}

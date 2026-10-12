@@ -15,6 +15,7 @@ import { FileViewer } from "@/components/file-viewer";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { ago, fileSize } from "@/lib/format";
+import { t } from "@/lib/i18n";
 import { useQuery } from "@/lib/query";
 import { navigate, routeHref } from "@/lib/route";
 import type { Doc, TreeEntry } from "@/lib/types";
@@ -30,6 +31,10 @@ const kindLabel: Record<string, string> = {
   xteam: "xteam slices",
   doc: "Other docs",
 };
+
+function kindTitle(kind: string) {
+  return kindLabel[kind] ? t(kindLabel[kind]) : kind;
+}
 
 type Mode = "kinds" | "files";
 
@@ -51,13 +56,13 @@ export function DocsTab({ slug, arg }: { slug: string; arg?: string }) {
             active={mode === "kinds"}
             onClick={() => changeMode("kinds")}
           >
-            Docs by kind
+            {t("Docs by kind")}
           </ModeTab>
           <ModeTab
             active={mode === "files"}
             onClick={() => changeMode("files")}
           >
-            Files
+            {t("Files")}
           </ModeTab>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -74,11 +79,12 @@ export function DocsTab({ slug, arg }: { slug: string; arg?: string }) {
         ) : (
           <Empty
             icon={<BookOpenIcon />}
-            title="Pick a document"
+            title={t("Pick a document")}
             className="h-full"
           >
-            Docs are collected from the project on every scan: READMEs, specs,
-            ADRs, progress files, changelogs, agent rules and xteam slices.
+            {t(
+              "Docs are collected from the project on every scan: READMEs, specs, ADRs, progress files, changelogs, agent rules and xteam slices.",
+            )}
           </Empty>
         )}
       </div>
@@ -143,13 +149,15 @@ function DocsByKind({ slug, selected }: { slug: string; selected?: string }) {
           <input
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
-            placeholder="Filter docs"
+            placeholder={t("Filter docs")}
             className="h-full w-full bg-transparent text-[12.5px] outline-none placeholder:text-muted-foreground"
           />
         </label>
       </div>
       {groups.length === 0 && (
-        <p className="px-3 text-xs text-muted-foreground">No docs found.</p>
+        <p className="px-3 text-xs text-muted-foreground">
+          {t("No docs found.")}
+        </p>
       )}
       {groups.map((group) => (
         <div key={group.kind} className="mb-1">
@@ -169,7 +177,7 @@ function DocsByKind({ slug, selected }: { slug: string; selected?: string }) {
                 !collapsed[group.kind] && "rotate-90",
               )}
             />
-            {kindLabel[group.kind] ?? group.kind}
+            {kindTitle(group.kind)}
             <span className="ml-auto font-normal tabular-nums">
               {group.docs.length}
             </span>
@@ -187,7 +195,9 @@ function DocsByKind({ slug, selected }: { slug: string; selected?: string }) {
       ))}
       {docs.data.truncated && (
         <p className="px-3 pt-2 text-[11px] text-warn">
-          Doc list truncated — the project has more docs than the scanner keeps.
+          {t(
+            "Doc list truncated — the project has more docs than the scanner keeps.",
+          )}
         </p>
       )}
     </div>
@@ -338,7 +348,7 @@ function TreeNode({
         navigate({ view: "project", slug, tab: "docs", arg: entry.path })
       }
       style={{ paddingLeft: 8 + depth * 12 + 16 }}
-      title={entry.sensitive ? "Sensitive file — never shown" : entry.path}
+      title={entry.sensitive ? t("Sensitive file — never shown") : entry.path}
       className={cn(
         "flex h-6 w-full items-center gap-1.5 pr-2 text-left text-[12.5px] hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50",
         selected === entry.path && "bg-accent",

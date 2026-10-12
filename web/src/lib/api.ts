@@ -13,6 +13,8 @@ import type {
   Job,
   Meta,
   Project,
+  ReviewerHealth,
+  ReviewerInfo,
   TreeEntry,
 } from "@/lib/types";
 
@@ -58,6 +60,16 @@ export const api = {
   config: () => request<Config>("GET", "/api/config"),
   patchConfig: (patch: Partial<Config>) =>
     request<Config>("PATCH", "/api/config", patch),
+  testReviewer: (name: string) =>
+    request<{ name: string; health: ReviewerHealth; health_label: string }>(
+      "POST",
+      `/api/reviewers/${enc(name)}/test`,
+    ),
+  testReviewers: () =>
+    request<{
+      results: Record<string, ReviewerHealth>;
+      reviewers: ReviewerInfo[];
+    }>("POST", "/api/reviewers/test"),
   overview: () =>
     request<{ cards: Card[]; active_reviews: Job[] }>("GET", "/api/overview"),
   inbox: (min: string) =>

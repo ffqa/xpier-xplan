@@ -12,6 +12,7 @@ import { ProjectCard } from "@/components/project-card";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
+import { t, tn } from "@/lib/i18n";
 import { invalidate } from "@/lib/query";
 import type { Card } from "@/lib/types";
 import { useOverview, useUI } from "@/lib/ui-state";
@@ -35,9 +36,22 @@ export function HomeView() {
     try {
       const result = await api.draftIntents();
       const fresh = result.skipped.filter((item) => item.code === "new").length;
+      const queuedMessage = tn(
+        result.queued.length,
+        "Drafting {count} intent (read-only).",
+        "Drafting {count} intents (read-only).",
+      );
       toast.success(
-        `Drafting ${result.queued.length} intents (read-only).` +
-          (fresh ? ` ${fresh} new projects are left for you to write.` : ""),
+        fresh
+          ? t("{queued} {fresh}", {
+              queued: queuedMessage,
+              fresh: tn(
+                fresh,
+                "{count} new project is left for you to write.",
+                "{count} new projects are left for you to write.",
+              ),
+            })
+          : queuedMessage,
       );
       invalidate("overview", "reviews:");
     } catch (error) {
@@ -55,8 +69,16 @@ export function HomeView() {
       (result) => result.status === "rejected",
     ).length;
     invalidate("overview", "brief:", "docs:");
-    if (failed) toast.error(`${failed} scans failed`);
-    else toast.success(`Rescanned ${cards.length} projects`);
+    if (failed)
+      toast.error(tn(failed, "{count} scan failed", "{count} scans failed"));
+    else
+      toast.success(
+        tn(
+          cards.length,
+          "Rescanned {count} project",
+          "Rescanned {count} projects",
+        ),
+      );
   };
 
   if (overview.error && !overview.data)
@@ -66,16 +88,16 @@ export function HomeView() {
     return (
       <Empty
         icon={<FolderPlusIcon />}
-        title="No projects registered"
+        title={t("No projects registered")}
         className="h-full"
       >
         <p>
-          Register the folders you work on. xplan keeps their intent, decisions
-          and progress outside the code, so you can come back without the
-          warm-up.
+          {t(
+            "Register the folders you work on. xplan keeps their intent, decisions and progress outside the code, so you can come back without the warm-up.",
+          )}
         </p>
         <Button className="mt-3" onClick={() => ui.setAddOpen(true)}>
-          Register projects
+          {t("Register projects")}
         </Button>
       </Empty>
     );
@@ -86,14 +108,21 @@ export function HomeView() {
       <div className="mx-auto max-w-6xl space-y-6 p-6">
         <header className="flex items-end gap-4">
           <div>
-            <h1 className="text-lg font-semibold">Where everything stands</h1>
+            <h1 className="text-lg font-semibold">
+              {t("Where everything stands")}
+            </h1>
             <p className="text-[13px] text-muted-foreground">
-              Projects needing your attention come first. Open one to get its
-              re-entry brief.
+              {t(
+                "Projects needing your attention come first. Open one to get its re-entry brief.",
+              )}
             </p>
           </div>
           {draftable > 0 && (
-            <Tip label="Projects that existed before you registered them, and still have no intent: the reviewer reconstructs why each was started, read-only. You correct the drafts. New projects are left for you to write.">
+            <Tip
+              label={t(
+                "Projects that existed before you registered them, and still have no intent: the reviewer reconstructs why each was started, read-only. You correct the drafts. New projects are left for you to write.",
+              )}
+            >
               <Button
                 variant="outline"
                 size="sm"
@@ -106,7 +135,7 @@ export function HomeView() {
                 ) : (
                   <WandSparklesIcon />
                 )}
-                Draft missing intents ({draftable})
+                {t("Draft missing intents ({count})", { count: draftable })}
               </Button>
             </Tip>
           )}
@@ -117,14 +146,14 @@ export function HomeView() {
             onClick={() => void rescanAll()}
           >
             <RefreshCwIcon />
-            Rescan all
+            {t("Rescan all")}
           </Button>
         </header>
         {sections.map((section) =>
           section.cards.length === 0 ? null : (
             <section key={section.title} className="space-y-2">
               <h2 className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                {section.title}{" "}
+                {t(section.title)}{" "}
                 <span className="font-normal">· {section.cards.length}</span>
               </h2>
               <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">

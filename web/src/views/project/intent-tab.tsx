@@ -15,7 +15,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
-import { ago } from "@/lib/format";
+import { timeAgo } from "@/lib/format";
+import { t } from "@/lib/i18n";
+import { jobReviewer } from "@/lib/reviewers";
 import { useIntentDraft } from "@/lib/intent-draft";
 import { setQueryData, useQuery } from "@/lib/query";
 import type { Intent, Job } from "@/lib/types";
@@ -80,7 +82,11 @@ export function IntentTab({ slug }: { slug: string }) {
           <TargetIcon className="size-3.5 text-muted-foreground" />
           <span className="text-[12.5px] font-medium">intent.md</span>
           <IntentBadge intent={intent.data} />
-          <Tip label="Let the reviewer reconstruct why this project was started, from its README, docs and git history. Read-only; your own text is never overwritten.">
+          <Tip
+            label={t(
+              "Let the reviewer reconstruct why this project was started, from its README, docs and git history. Read-only; your own text is never overwritten.",
+            )}
+          >
             <Button
               variant="outline"
               size="xs"
@@ -92,7 +98,7 @@ export function IntentTab({ slug }: { slug: string }) {
               ) : (
                 <WandSparklesIcon />
               )}
-              Draft from history
+              {t("Draft from history")}
             </Button>
           </Tip>
         </>
@@ -103,11 +109,14 @@ export function IntentTab({ slug }: { slug: string }) {
             <Banner tone="info" icon={<Loader2Icon className="animate-spin" />}>
               <span>
                 {job.status === "queued"
-                  ? "Waiting for a free review slot…"
-                  : `${job.reviewer} is reading the README, docs and git history (read-only).`}{" "}
+                  ? t("Waiting for a free review slot…")
+                  : t(
+                      "{reviewer} is reading the README, docs and git history (read-only).",
+                      { reviewer: jobReviewer(job) },
+                    )}{" "}
                 {intent.data.filled
-                  ? "Your intent stays as it is; the draft will wait here."
-                  : "The draft will be filled in here when it is ready."}
+                  ? t("Your intent stays as it is; the draft will wait here.")
+                  : t("The draft will be filled in here when it is ready.")}
               </span>
               <Button
                 variant="ghost"
@@ -116,15 +125,13 @@ export function IntentTab({ slug }: { slug: string }) {
                 onClick={() => void draft.cancel()}
               >
                 <CircleStopIcon />
-                Cancel
+                {t("Cancel")}
               </Button>
             </Banner>
           )}
           {!draft.running && intent.data.draft && (
             <Banner tone="warn" icon={<WandSparklesIcon />}>
-              This is an agent&apos;s draft, inferred from history. Fix what is
-              wrong, add what only you know (the real why), then delete the line
-              starting with <code>&gt; **Draft**</code> and save.
+              <DraftMarkerHint />
             </Banner>
           )}
           {!draft.running && keptDraft && (
@@ -134,7 +141,9 @@ export function IntentTab({ slug }: { slug: string }) {
               onLoad={(content) => {
                 setReplacement({ content, nonce: Date.now() });
                 toast.info(
-                  "Draft loaded as unsaved changes. Revert brings your text back.",
+                  t(
+                    "Draft loaded as unsaved changes. Revert brings your text back.",
+                  ),
                 );
               }}
               onDismiss={() => dismiss(keptDraft.id)}
@@ -143,7 +152,9 @@ export function IntentTab({ slug }: { slug: string }) {
           {!draft.running && failedDraft && (
             <Banner tone="crit" icon={<TriangleAlertIcon />}>
               <span className="min-w-0 truncate">
-                Last draft failed: {failedDraft.error}
+                {t("Last draft failed: {error}", {
+                  error: failedDraft.error ?? "",
+                })}
               </span>
               <DismissButton
                 className="ml-auto"
@@ -158,16 +169,32 @@ export function IntentTab({ slug }: { slug: string }) {
 }
 
 function IntentBadge({ intent }: { intent: Intent }) {
-  if (intent.draft) return <Badge variant="warn">draft</Badge>;
-  if (intent.filled) return <Badge variant="ok">filled</Badge>;
-  return <Badge variant="warn">empty</Badge>;
+  if (intent.draft) return <Badge variant="warn">{t("draft")}</Badge>;
+  if (intent.filled) return <Badge variant="ok">{t("filled")}</Badge>;
+  return <Badge variant="warn">{t("empty")}</Badge>;
+}
+
+/** The marker stays literal: it must match the line in intent.md. */
+function DraftMarkerHint() {
+  const [before, after] = t(
+    "This is an agent's draft, inferred from history. Fix what is wrong, add what only you know (the real why), then delete the line starting with {marker} and save.",
+  ).split("{marker}");
+  return (
+    <>
+      {before}
+      <code>&gt; **Draft**</code>
+      {after}
+    </>
+  );
 }
 
 function saveMessage(saved: Intent): string {
   if (saved.draft)
-    return "Saved — still marked as a draft until you delete the Draft line";
-  if (saved.filled) return "Intent saved";
-  return "Saved — fill in at least Why or Goal so drift reviews have something to compare against";
+    return t("Saved — still marked as a draft until you delete the Draft line");
+  if (saved.filled) return t("Intent saved");
+  return t(
+    "Saved — fill in at least Why or Goal so drift reviews have something to compare against",
+  );
 }
 
 /** A draft produced while the owner's intent already existed. */
@@ -189,8 +216,10 @@ function KeptDraftBanner({
   return (
     <Banner tone="info" icon={<WandSparklesIcon />}>
       <span>
-        A draft from {job.reviewer} ({ago(job.finished_at ?? job.created_at)}{" "}
-        ago) is ready. Your intent was kept.
+        {t("A draft from {reviewer} ({time}) is ready. Your intent was kept.", {
+          reviewer: jobReviewer(job),
+          time: timeAgo(job.finished_at ?? job.created_at),
+        })}
       </span>
       <Button
         size="xs"
@@ -199,7 +228,7 @@ function KeptDraftBanner({
         disabled={!content}
         onClick={() => onLoad(content)}
       >
-        Load into editor
+        {t("Load into editor")}
       </Button>
       <DismissButton onClick={onDismiss} />
     </Banner>
@@ -246,7 +275,7 @@ function DismissButton({
       variant="ghost"
       size="icon-xs"
       className={cn("shrink-0", className)}
-      title="Dismiss"
+      title={t("Dismiss")}
       onClick={onClick}
     >
       <XIcon />

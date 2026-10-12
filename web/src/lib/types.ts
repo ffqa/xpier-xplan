@@ -152,6 +152,10 @@ export interface Job {
   prompt_chars: number;
   /** Intent drafts only: the draft filled an empty intent.md. */
   intent_written?: boolean;
+  /** "auto" when the reviewer was picked at run time; `reviewer` is the pick. */
+  reviewer_requested?: string;
+  /** Reviewers "auto" skipped before the pick, as "name: reason". */
+  attempts?: string[];
 }
 
 export interface ADR {
@@ -204,11 +208,24 @@ export interface DraftOutcome {
   reason?: string;
 }
 
+export type HealthStatus = "ok" | "auth" | "missing" | "timeout" | "error";
+
+export interface ReviewerHealth {
+  status: HealthStatus;
+  detail?: string;
+  checked_at: string;
+  duration_ms?: number;
+  /** "test" for a smoke test, "run" for a real review. */
+  source: "test" | "run";
+}
+
 export interface ReviewerInfo {
   name: string;
   description: string;
   command: string[];
   installed: boolean;
+  health?: ReviewerHealth;
+  health_label?: string;
 }
 
 export interface ConsoleCommand {
@@ -225,8 +242,13 @@ export interface Meta {
   schedule_values: string[];
   review_kinds: ReviewKind[];
   doc_kinds: string[];
+  /** Presets in the order "auto" tries them. */
   reviewers: ReviewerInfo[];
   default_reviewer: string;
+  reviewer_order: string[];
+  /** What "auto" would use now; verified when it passed a recent check. */
+  auto_choice: { name: string; verified: boolean };
+  language: string;
   report_language: string;
   commands: ConsoleCommand[];
 }
@@ -237,6 +259,8 @@ export interface Config {
   review_timeout: string;
   max_concurrent_reviews: number;
   default_reviewer: string;
+  reviewer_order: string[];
+  language: string;
   report_language: string;
   default_schedule: Record<string, string>;
   reviewers: Record<string, { description: string; command: string[] }>;

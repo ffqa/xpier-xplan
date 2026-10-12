@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ffqa/xpier-xplan/internal/i18n"
 	"github.com/ffqa/xpier-xplan/internal/project"
 	"github.com/ffqa/xpier-xplan/internal/review"
 	"github.com/ffqa/xpier-xplan/internal/scanner"
@@ -67,36 +68,36 @@ func Health(facts Facts) []Flag {
 	snapshot := facts.Snapshot
 	switch {
 	case snapshot == nil:
-		add(LevelInfo, "never_scanned", "Not scanned yet")
+		add(LevelInfo, "never_scanned", i18n.T("Not scanned yet"))
 	case !snapshot.PathExists:
-		add(LevelCrit, "path_missing", "Project directory is missing")
+		add(LevelCrit, "path_missing", i18n.T("Project directory is missing"))
 	}
 	switch {
 	case !facts.IntentFilled:
-		add(LevelWarn, "no_intent", "Intent not written yet — why does this project exist?")
+		add(LevelWarn, "no_intent", i18n.T("Intent not written yet — why does this project exist?"))
 	case facts.IntentDraft:
-		add(LevelWarn, "intent_draft", "Intent is an agent's draft — correct it, then delete the Draft line")
+		add(LevelWarn, "intent_draft", i18n.T("Intent is an agent's draft — correct it, then delete the Draft line"))
 	}
 	if snapshot != nil && snapshot.PathExists {
 		if snapshot.Git == nil {
-			add(LevelWarn, "no_git", "Not a git repository")
+			add(LevelWarn, "no_git", i18n.T("Not a git repository"))
 		} else {
 			git := snapshot.Git
 			if facts.Project.Status == "active" && git.LastCommitAt != nil && facts.Now.Sub(*git.LastCommitAt) > staleAfter {
-				add(LevelWarn, "stale", fmt.Sprintf("Marked active but no commit for %d days", int(facts.Now.Sub(*git.LastCommitAt).Hours()/24)))
+				add(LevelWarn, "stale", i18n.T("Marked active but no commit for %d days", int(facts.Now.Sub(*git.LastCommitAt).Hours()/24)))
 			}
 			if git.DirtyFiles > 30 {
-				add(LevelWarn, "dirty", fmt.Sprintf("%d uncommitted files", git.DirtyFiles))
+				add(LevelWarn, "dirty", i18n.T("%d uncommitted files", git.DirtyFiles))
 			} else if git.DirtyFiles > 0 {
-				add(LevelInfo, "dirty", fmt.Sprintf("%d uncommitted files", git.DirtyFiles))
+				add(LevelInfo, "dirty", i18n.T("%d uncommitted files", git.DirtyFiles))
 			}
 		}
 		if snapshot.Xteam != nil && snapshot.Xteam.Open > 0 {
-			add(LevelInfo, "xteam_open", fmt.Sprintf("%d xteam slices in flight", snapshot.Xteam.Open))
+			add(LevelInfo, "xteam_open", i18n.T("%d xteam slices in flight", snapshot.Xteam.Open))
 		}
 	}
 	if facts.LastPark == nil && facts.Project.Status != "done" {
-		add(LevelInfo, "no_park", "No park note — write where you stopped before switching away")
+		add(LevelInfo, "no_park", i18n.T("No park note — write where you stopped before switching away"))
 	}
 	for _, kind := range review.ReviewKindIDs() {
 		job := facts.LatestDone[kind]
@@ -107,9 +108,9 @@ func Health(facts Facts) []Flag {
 		label := kindTitle(kind)
 		switch {
 		case job.Verdict == review.VerdictCritical || counts["critical"] > 0:
-			add(LevelCrit, "review_"+kind, fmt.Sprintf("%s: %s", label, nonEmpty(job.Summary, "critical findings")))
+			add(LevelCrit, "review_"+kind, fmt.Sprintf("%s: %s", label, nonEmpty(job.Summary, i18n.T("critical findings"))))
 		case job.Verdict == review.VerdictAttention || counts["high"] > 0:
-			add(LevelWarn, "review_"+kind, fmt.Sprintf("%s: %s", label, nonEmpty(job.Summary, "needs attention")))
+			add(LevelWarn, "review_"+kind, fmt.Sprintf("%s: %s", label, nonEmpty(job.Summary, i18n.T("needs attention"))))
 		}
 	}
 	for kind, schedule := range facts.Project.Schedule {
@@ -120,7 +121,7 @@ func Health(facts Facts) []Flag {
 		last := facts.LatestDone[kind]
 		if last == nil || facts.Now.Sub(last.CreatedAt) > 2*period {
 			if attempt := facts.LastAttempts[kind]; attempt != nil && attempt.Status == review.StatusFailed {
-				add(LevelWarn, "review_failed_"+kind, fmt.Sprintf("%s: last scheduled run failed", kindTitle(kind)))
+				add(LevelWarn, "review_failed_"+kind, i18n.T("%s: last scheduled run failed", kindTitle(kind)))
 			}
 		}
 	}
@@ -176,8 +177,8 @@ func sortFlags(flags []Flag) {
 }
 
 func kindTitle(kind string) string {
-	if definition, ok := review.KindByID(kind); ok {
-		return definition.Title
+	if _, ok := review.KindByID(kind); ok {
+		return review.KindTitle(kind)
 	}
 	return strings.Title(kind) //nolint:staticcheck // ASCII kind ids only
 }

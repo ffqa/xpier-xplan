@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/misc";
 import { Tip } from "@/components/ui/tooltip";
-import { duration } from "@/lib/format";
-import { navigate, type Route } from "@/lib/route";
+import { duration, jobStatusLabel, kindLabel } from "@/lib/format";
+import { t } from "@/lib/i18n";
+import { navigate, type ProjectTab, type Route } from "@/lib/route";
 import { useOverview, useUI } from "@/lib/ui-state";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,16 @@ const viewTitle: Record<string, string> = {
   home: "Overview",
   board: "Board",
   inbox: "Inbox",
+  settings: "Settings",
+};
+
+const tabTitle: Record<ProjectTab, string> = {
+  brief: "Brief",
+  intent: "Intent",
+  decisions: "Decisions",
+  docs: "Docs",
+  reviews: "Reviews",
+  journal: "Journal",
   settings: "Settings",
 };
 
@@ -52,11 +63,11 @@ export function TitleBar({ route }: { route: Route }) {
             <span className="truncate text-foreground">{projectName}</span>
             <ChevronRightIcon className="size-3.5 shrink-0" />
             <span className="capitalize">
-              {route.view === "project" ? route.tab : ""}
+              {route.view === "project" ? t(tabTitle[route.tab]) : ""}
             </span>
           </>
         ) : (
-          <span className="text-foreground">{viewTitle[route.view]}</span>
+          <span className="text-foreground">{t(viewTitle[route.view])}</span>
         )}
       </nav>
 
@@ -66,13 +77,13 @@ export function TitleBar({ route }: { route: Route }) {
         className="mx-auto flex h-7 w-full max-w-md items-center gap-2 rounded-md border bg-background/60 px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:border-ring/50 hover:text-foreground"
       >
         <SearchIcon className="size-3.5" />
-        <span>Jump to project, tab or command</span>
+        <span>{t("Jump to project, tab or command")}</span>
         <Kbd className="ml-auto">⌘K</Kbd>
       </button>
 
       <div className="flex items-center gap-1">
         <RunningReviews />
-        <Tip label="Toggle console (⌘J)" side="bottom">
+        <Tip label={t("Toggle console (⌘J)")} side="bottom">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -97,7 +108,7 @@ function RunningReviews() {
         render={<Button variant="ghost" size="sm" className="text-info" />}
       >
         <Loader2Icon className="animate-spin" />
-        {jobs.length} running
+        {t("{count} running", { count: jobs.length })}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         {jobs.map((job) => (
@@ -114,10 +125,12 @@ function RunningReviews() {
           >
             <KindIcon kind={job.kind} />
             <span className="truncate">
-              {job.project} · {job.kind}
+              {job.project} · {kindLabel(job.kind)}
             </span>
             <span className="ml-auto text-xs text-muted-foreground">
-              {job.status === "queued" ? "queued" : duration(job.started_at)}
+              {job.status === "queued"
+                ? jobStatusLabel(job.status)
+                : duration(job.started_at)}
             </span>
           </DropdownMenuItem>
         ))}

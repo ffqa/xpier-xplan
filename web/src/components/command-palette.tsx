@@ -17,11 +17,22 @@ import { toast } from "sonner";
 import { HealthDot, kindIcon } from "@/components/status";
 import { Kbd } from "@/components/ui/misc";
 import { api } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import { invalidate } from "@/lib/query";
-import { navigate, PROJECT_TABS, useRoute } from "@/lib/route";
+import { navigate, PROJECT_TABS, useRoute, type ProjectTab } from "@/lib/route";
 import type { Level } from "@/lib/types";
 import { useMeta, useOverview, useUI } from "@/lib/ui-state";
 import { cn } from "@/lib/utils";
+
+const goToTab: Record<ProjectTab, string> = {
+  brief: "Go to brief",
+  intent: "Go to intent",
+  decisions: "Go to decisions",
+  docs: "Go to docs",
+  reviews: "Go to reviews",
+  journal: "Go to journal",
+  settings: "Go to settings",
+};
 
 interface PaletteItem {
   id: string;
@@ -100,7 +111,7 @@ function PaletteBody({ close }: { close: () => void }) {
           autoFocus
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search projects, tabs and actions…"
+          placeholder={t("Search projects, tabs and actions…")}
           className="h-full flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
         />
         <Kbd>esc</Kbd>
@@ -111,7 +122,7 @@ function PaletteBody({ close }: { close: () => void }) {
       >
         {filtered.length === 0 && (
           <p className="p-6 text-center text-xs text-muted-foreground">
-            Nothing matches “{query}”.
+            {t("Nothing matches “{query}”.", { query })}
           </p>
         )}
         {filtered.map((item, index) => {
@@ -170,19 +181,20 @@ function usePaletteItems(close: () => void): PaletteItem[] {
     const list: PaletteItem[] = [];
 
     if (current) {
+      const thisProject = t("This project");
       for (const tab of PROJECT_TABS) {
         list.push({
           id: `tab-${tab}`,
-          group: "This project",
-          label: `Go to ${tab}`,
+          group: thisProject,
+          label: t(goToTab[tab]),
           icon: LayersIcon,
           run: go(() => navigate({ view: "project", slug: current, tab })),
         });
       }
       list.push({
         id: "park",
-        group: "This project",
-        label: "Park — leave a note before switching",
+        group: thisProject,
+        label: t("Park — leave a note before switching"),
         icon: SquareParkingIcon,
         run: go(() => ui.openPark(current)),
       });
@@ -190,18 +202,18 @@ function usePaletteItems(close: () => void): PaletteItem[] {
         if (kind.id === "ask") continue;
         list.push({
           id: `review-${kind.id}`,
-          group: "This project",
+          group: thisProject,
           label: kind.review
-            ? `Run ${kind.title}`
-            : "Draft intent from history",
-          hint: "read-only",
+            ? t("Run {title}", { title: kind.title })
+            : t("Draft intent from history"),
+          hint: t("read-only"),
           icon: kindIcon[kind.id],
           keywords: kind.review ? "review" : "intent why draft",
           run: go(() => {
             api
               .startReview(current, kind.id)
               .then(() => {
-                toast.success(`${kind.title} queued`);
+                toast.success(t("{title} queued", { title: kind.title }));
                 invalidate(
                   "overview",
                   `reviews:${current}`,
@@ -217,7 +229,7 @@ function usePaletteItems(close: () => void): PaletteItem[] {
     for (const card of overview.data?.cards ?? []) {
       list.push({
         id: `project-${card.slug}`,
-        group: "Projects",
+        group: t("Projects"),
         label: card.name,
         hint: card.last_park?.next || card.summary,
         level: card.health_level,
@@ -228,46 +240,48 @@ function usePaletteItems(close: () => void): PaletteItem[] {
       });
     }
 
+    const views = t("Views");
+    const actions = t("Actions");
     list.push(
       {
         id: "view-home",
-        group: "Views",
-        label: "Overview",
+        group: views,
+        label: t("Overview"),
         icon: FolderIcon,
         run: go(() => navigate({ view: "home" })),
       },
       {
         id: "view-board",
-        group: "Views",
-        label: "Board",
+        group: views,
+        label: t("Board"),
         icon: KanbanSquareIcon,
         run: go(() => navigate({ view: "board" })),
       },
       {
         id: "view-inbox",
-        group: "Views",
-        label: "Inbox",
+        group: views,
+        label: t("Inbox"),
         icon: InboxIcon,
         run: go(() => navigate({ view: "inbox" })),
       },
       {
         id: "view-settings",
-        group: "Views",
-        label: "Settings",
+        group: views,
+        label: t("Settings"),
         icon: Settings2Icon,
         run: go(() => navigate({ view: "settings" })),
       },
       {
         id: "add",
-        group: "Actions",
-        label: "Register a project",
+        group: actions,
+        label: t("Register a project"),
         icon: PlusIcon,
         run: go(() => ui.setAddOpen(true)),
       },
       {
         id: "console",
-        group: "Actions",
-        label: "Toggle console",
+        group: actions,
+        label: t("Toggle console"),
         hint: "⌘J",
         icon: TerminalSquareIcon,
         run: go(() => ui.toggleConsole()),
@@ -278,7 +292,7 @@ function usePaletteItems(close: () => void): PaletteItem[] {
       for (const command of meta.data?.commands ?? []) {
         list.push({
           id: `cmd-${command.name}`,
-          group: "Console commands",
+          group: t("Console commands"),
           label: `${command.name} ${command.args}`.trim(),
           hint: command.summary,
           icon: TerminalSquareIcon,

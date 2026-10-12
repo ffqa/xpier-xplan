@@ -22,7 +22,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Progress } from "@/components/ui/misc";
 import { api } from "@/lib/api";
-import { ago, dateTime, duration, percent } from "@/lib/format";
+import {
+  ago,
+  dateTime,
+  duration,
+  jobStatusLabel,
+  kindLabel,
+  percent,
+  timeAgo,
+} from "@/lib/format";
+import { t, tn } from "@/lib/i18n";
+import { jobReviewer } from "@/lib/reviewers";
 import { BRIEF_SECTIONS, sectionBody } from "@/lib/intent";
 import { useIntentDraft } from "@/lib/intent-draft";
 import { invalidate } from "@/lib/query";
@@ -44,7 +54,7 @@ export function BriefTab({ slug, brief }: { slug: string; brief: Brief }) {
           <SinceCard slug={slug} brief={brief} />
         </div>
         <div className="min-w-0 space-y-4">
-          <Section title="Health" icon={<HeartPulseIcon />}>
+          <Section title={t("Health")} icon={<HeartPulseIcon />}>
             <FlagList flags={brief.card.health} />
           </Section>
           <ReviewsCard slug={slug} brief={brief} />
@@ -66,22 +76,26 @@ function IntentCard({ slug, brief }: { slug: string; brief: Brief }) {
       href={routeHref({ view: "project", slug, tab: "intent" })}
       className={buttonVariants({ variant: "ghost", size: "xs" })}
     >
-      Edit
+      {t("Edit")}
     </a>
   );
   if (!brief.card.intent_filled || sections.length === 0) {
     return (
       <Section
-        title="Why this exists"
+        title={t("Why this exists")}
         icon={<TargetIcon />}
         actions={edit}
         className="border-warn/40"
       >
-        <p className="text-[13px]">The intent is still empty.</p>
+        <p className="text-[13px]">{t("The intent is still empty.")}</p>
         <p className="mt-1 text-xs text-muted-foreground">
           {brief.card.established
-            ? "This project already has history. Let the reviewer reconstruct why it was started, then correct the draft in your own words."
-            : "Write down why this project exists and what “done” means, in your own words. Drift reviews compare the code against it, and it is the first thing you will read when you come back."}
+            ? t(
+                "This project already has history. Let the reviewer reconstruct why it was started, then correct the draft in your own words.",
+              )
+            : t(
+                "Write down why this project exists and what “done” means, in your own words. Drift reviews compare the code against it, and it is the first thing you will read when you come back.",
+              )}
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {brief.card.established && <DraftIntentButton slug={slug} primary />}
@@ -90,7 +104,7 @@ function IntentCard({ slug, brief }: { slug: string; brief: Brief }) {
             variant={brief.card.established ? "outline" : "default"}
             onClick={() => navigate({ view: "project", slug, tab: "intent" })}
           >
-            Write it myself
+            {t("Write it myself")}
           </Button>
         </div>
       </Section>
@@ -100,10 +114,10 @@ function IntentCard({ slug, brief }: { slug: string; brief: Brief }) {
     <Section
       title={
         <>
-          Why this exists
+          {t("Why this exists")}
           {brief.card.intent_draft && (
             <Badge variant="warn" className="ml-2 normal-case">
-              draft — needs your edit
+              {t("draft — needs your edit")}
             </Badge>
           )}
         </>
@@ -116,7 +130,7 @@ function IntentCard({ slug, brief }: { slug: string; brief: Brief }) {
         {sections.map((section) => (
           <div key={section.prefix} className="min-w-0">
             <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-              {section.label}
+              {t(section.label)}
             </div>
             <Markdown className="text-[13px]">{section.body}</Markdown>
           </div>
@@ -138,7 +152,9 @@ function DraftIntentButton({
     return (
       <span className="flex items-center gap-1.5 text-xs text-info">
         <Loader2Icon className="size-3.5 animate-spin" />
-        {draft.job.reviewer} is drafting the intent…
+        {t("{reviewer} is drafting the intent…", {
+          reviewer: jobReviewer(draft.job),
+        })}
       </span>
     );
   }
@@ -154,7 +170,7 @@ function DraftIntentButton({
       ) : (
         <WandSparklesIcon />
       )}
-      Draft from history
+      {t("Draft from history")}
     </Button>
   );
 }
@@ -165,19 +181,20 @@ function ParkCard({ slug, brief }: { slug: string; brief: Brief }) {
   const action = (
     <Button variant="ghost" size="xs" onClick={() => ui.openPark(slug)}>
       <SquareParkingIcon />
-      Park now
+      {t("Park now")}
     </Button>
   );
   if (!park) {
     return (
       <Section
-        title="Where you left off"
+        title={t("Where you left off")}
         icon={<SquareParkingIcon />}
         actions={action}
       >
         <p className="text-xs text-muted-foreground">
-          No park note yet. Before you switch to another project, press Park and
-          write one line about where you stopped.
+          {t(
+            "No park note yet. Before you switch to another project, press Park and write one line about where you stopped.",
+          )}
         </p>
       </Section>
     );
@@ -186,21 +203,21 @@ function ParkCard({ slug, brief }: { slug: string; brief: Brief }) {
     <Section
       title={
         <>
-          Where you left off{" "}
-          <span className="font-normal normal-case">· {ago(park.at)} ago</span>
+          {t("Where you left off")}{" "}
+          <span className="font-normal normal-case">· {timeAgo(park.at)}</span>
         </>
       }
       icon={<SquareParkingIcon />}
       actions={action}
     >
       <dl className="grid gap-2 text-[13px]">
-        <ParkLine label="Stopped at" value={park.stopped} />
-        <ParkLine label="Next step" value={park.next} highlight />
-        <ParkLine label="Open questions" value={park.open} />
+        <ParkLine label={t("Stopped at")} value={park.stopped} />
+        <ParkLine label={t("Next step")} value={park.next} highlight />
+        <ParkLine label={t("Open questions")} value={park.open} />
       </dl>
       {park.head && (
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Parked at commit {park.head.slice(0, 8)}
+          {t("Parked at commit {hash}", { hash: park.head.slice(0, 8) })}
         </p>
       )}
     </Section>
@@ -239,7 +256,7 @@ function SinceCard({ slug, brief }: { slug: string; brief: Brief }) {
     setBusy(true);
     try {
       await api.visit(slug);
-      toast.success("Marked as caught up");
+      toast.success(t("Marked as caught up"));
       refreshProject(slug);
     } catch (error) {
       toast.error((error as Error).message);
@@ -250,11 +267,11 @@ function SinceCard({ slug, brief }: { slug: string; brief: Brief }) {
 
   const title = since.reference ? (
     <>
-      Since your {since.reference}{" "}
-      <span className="font-normal normal-case">· {ago(since.at)} ago</span>
+      {sinceTitle(since.reference)}{" "}
+      <span className="font-normal normal-case">· {timeAgo(since.at)}</span>
     </>
   ) : (
-    "Recent activity"
+    t("Recent activity")
   );
 
   return (
@@ -269,20 +286,26 @@ function SinceCard({ slug, brief }: { slug: string; brief: Brief }) {
           disabled={busy}
         >
           {busy ? <Loader2Icon className="animate-spin" /> : <CheckCheckIcon />}
-          I&apos;m caught up
+          {t("I'm caught up")}
         </Button>
       }
     >
       {!since.reference && <RecentCommits brief={brief} />}
       {since.reference && nothing && (
         <p className="text-xs text-muted-foreground">
-          Nothing changed since then.
+          {t("Nothing changed since then.")}
         </p>
       )}
       {since.reference && !nothing && (
         <div className="space-y-4">
           {since.commits.length > 0 && (
-            <SinceGroup title={`${since.commits.length} commits`}>
+            <SinceGroup
+              title={tn(
+                since.commits.length,
+                "{count} commit",
+                "{count} commits",
+              )}
+            >
               <ul className="space-y-1">
                 {since.commits.map((commit) => (
                   <li
@@ -304,13 +327,23 @@ function SinceCard({ slug, brief }: { slug: string; brief: Brief }) {
               </ul>
               {since.other_files > 0 && (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  {since.other_files} non-doc files changed.
+                  {tn(
+                    since.other_files,
+                    "{count} non-doc file changed.",
+                    "{count} non-doc files changed.",
+                  )}
                 </p>
               )}
             </SinceGroup>
           )}
           {since.docs.length > 0 && (
-            <SinceGroup title={`${since.docs.length} docs changed`}>
+            <SinceGroup
+              title={tn(
+                since.docs.length,
+                "{count} doc changed",
+                "{count} docs changed",
+              )}
+            >
               <ul className="space-y-1">
                 {since.docs.map((doc) => (
                   <li key={doc.path}>
@@ -336,7 +369,13 @@ function SinceCard({ slug, brief }: { slug: string; brief: Brief }) {
             </SinceGroup>
           )}
           {since.slices.length > 0 && (
-            <SinceGroup title={`${since.slices.length} xteam slices moved`}>
+            <SinceGroup
+              title={tn(
+                since.slices.length,
+                "{count} xteam slice moved",
+                "{count} xteam slices moved",
+              )}
+            >
               <ul className="space-y-1">
                 {since.slices.map((task) => (
                   <li
@@ -346,7 +385,7 @@ function SinceCard({ slug, brief }: { slug: string; brief: Brief }) {
                     <UsersIcon className="size-3 shrink-0 text-muted-foreground" />
                     <span className="truncate">{task.title || task.slug}</span>
                     <Badge variant={task.closed ? "ok" : "info"}>
-                      {task.closed ? "closed" : task.stage}
+                      {task.closed ? t("closed") : task.stage}
                     </Badge>
                     {task.verdict && (
                       <Badge variant="muted">{task.verdict}</Badge>
@@ -357,7 +396,13 @@ function SinceCard({ slug, brief }: { slug: string; brief: Brief }) {
             </SinceGroup>
           )}
           {since.reviews.length > 0 && (
-            <SinceGroup title={`${since.reviews.length} reviews finished`}>
+            <SinceGroup
+              title={tn(
+                since.reviews.length,
+                "{count} review finished",
+                "{count} reviews finished",
+              )}
+            >
               <ul className="space-y-1">
                 {since.reviews.map((job) => (
                   <li key={job.id}>
@@ -390,20 +435,29 @@ function SinceCard({ slug, brief }: { slug: string; brief: Brief }) {
   );
 }
 
+/** The server sends "last visit" or "last park note" as the reference. */
+function sinceTitle(reference: string): string {
+  if (reference === "last visit") return t("Since your last visit");
+  if (reference === "last park note") return t("Since your last park note");
+  return t("Since your {reference}", { reference });
+}
+
 function RecentCommits({ brief }: { brief: Brief }) {
   const recent = brief.snapshot?.git?.recent ?? [];
   if (recent.length === 0)
     return (
       <p className="text-xs text-muted-foreground">
-        No commits found. Park this project once and xplan will show what
-        changed from then on.
+        {t(
+          "No commits found. Park this project once and xplan will show what changed from then on.",
+        )}
       </p>
     );
   return (
     <>
       <p className="mb-2 text-xs text-muted-foreground">
-        First visit — showing the latest commits. From now on this card shows
-        only what changed since you last looked.
+        {t(
+          "First visit — showing the latest commits. From now on this card shows only what changed since you last looked.",
+        )}
       </p>
       <ul className="space-y-1">
         {recent.slice(0, 8).map((commit) => (
@@ -450,7 +504,7 @@ function ReviewsCard({ slug, brief }: { slug: string; brief: Brief }) {
   const run = async (kind: string) => {
     try {
       await api.startReview(slug, kind);
-      toast.success(`${kind} review queued`);
+      toast.success(t("{kind} review queued", { kind }));
       refreshProject(slug);
       invalidate("overview");
     } catch (error) {
@@ -460,7 +514,7 @@ function ReviewsCard({ slug, brief }: { slug: string; brief: Brief }) {
 
   return (
     <Section
-      title="External reviews"
+      title={t("External reviews")}
       icon={<FileTextIcon />}
       bodyClassName="p-1"
     >
@@ -488,17 +542,23 @@ function ReviewsCard({ slug, brief }: { slug: string; brief: Brief }) {
                 className="min-w-0 flex-1"
                 title={job?.summary}
               >
-                <div className="text-[12.5px] capitalize">{kind.id}</div>
+                <div className="text-[12.5px] capitalize">
+                  {kindLabel(kind.id)}
+                </div>
                 <div className="truncate text-[11px] text-muted-foreground">
                   {job
-                    ? `${ago(job.created_at)} ago · ${job.findings.length} findings`
-                    : "never run"}
+                    ? `${timeAgo(job.created_at)} · ${tn(
+                        job.findings.length,
+                        "{count} finding",
+                        "{count} findings",
+                      )}`
+                    : t("never run")}
                 </div>
               </a>
               {running ? (
                 <Badge variant="info">
                   <Loader2Icon className="animate-spin" />
-                  running
+                  {jobStatusLabel("running")}
                 </Badge>
               ) : (
                 <>
@@ -507,7 +567,7 @@ function ReviewsCard({ slug, brief }: { slug: string; brief: Brief }) {
                     variant="ghost"
                     size="icon-xs"
                     className="opacity-0 group-hover:opacity-100"
-                    title={`Run ${kind.title}`}
+                    title={t("Run {title}", { title: kind.title })}
                     onClick={() => void run(kind.id)}
                   >
                     <PlayIcon />
@@ -523,7 +583,7 @@ function ReviewsCard({ slug, brief }: { slug: string; brief: Brief }) {
           {brief.active_reviews
             .map(
               (job) =>
-                `${job.kind} ${job.status} ${duration(job.started_at ?? job.created_at)}`,
+                `${kindLabel(job.kind)} ${jobStatusLabel(job.status)} ${duration(job.started_at ?? job.created_at)}`,
             )
             .join(" · ")}
         </p>
@@ -537,11 +597,11 @@ function ProgressCard({ brief }: { brief: Brief }) {
   const checklist = card.checklist ?? { done: 0, total: 0 };
   const git = snapshot?.git;
   return (
-    <Section title="Progress" icon={<ActivityIcon />}>
+    <Section title={t("Progress")} icon={<ActivityIcon />}>
       {checklist.total > 0 && (
         <div className="mb-3">
           <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
-            <span>Checklists across docs</span>
+            <span>{t("Checklists across docs")}</span>
             <span className="tabular-nums">
               {checklist.done}/{checklist.total}
             </span>
@@ -550,38 +610,43 @@ function ProgressCard({ brief }: { brief: Brief }) {
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">
-        <Stat label="Branch" value={card.branch || "—"} />
+        <Stat label={t("Branch")} value={card.branch || "—"} />
         <Stat
-          label="Uncommitted"
-          value={git ? `${git.dirty_files} files` : "—"}
+          label={t("Uncommitted")}
+          value={
+            git ? tn(git.dirty_files, "{count} file", "{count} files") : "—"
+          }
           hint={git?.dirty_sample?.join("\n")}
         />
         <Stat
-          label="Commits 7d / 30d"
+          label={t("Commits 7d / 30d")}
           value={git ? `${git.commits_7d} / ${git.commits_30d}` : "—"}
         />
         <Stat
-          label="Last commit"
-          value={card.last_commit_at ? `${ago(card.last_commit_at)} ago` : "—"}
+          label={t("Last commit")}
+          value={card.last_commit_at ? timeAgo(card.last_commit_at) : "—"}
           hint={card.last_commit_subject}
         />
         {(card.xteam_open > 0 || card.xteam_closed > 0) && (
           <Stat
-            label="xteam slices"
-            value={`${card.xteam_open} open · ${card.xteam_closed} closed`}
+            label={t("xteam slices")}
+            value={t("{open} open · {closed} closed", {
+              open: card.xteam_open,
+              closed: card.xteam_closed,
+            })}
           />
         )}
         {card.changelog_version && (
           <Stat
-            label="Changelog"
+            label={t("Changelog")}
             value={card.changelog_version}
             hint={snapshot?.changelog?.date}
           />
         )}
-        <Stat label="Docs tracked" value={card.doc_count} />
+        <Stat label={t("Docs tracked")} value={card.doc_count} />
         <Stat
-          label="Scanned"
-          value={card.last_scan_at ? `${ago(card.last_scan_at)} ago` : "never"}
+          label={t("Scanned")}
+          value={card.last_scan_at ? timeAgo(card.last_scan_at) : t("never")}
           hint={dateTime(card.last_scan_at)}
         />
       </div>
@@ -596,7 +661,7 @@ function DecisionsCard({ slug, brief }: { slug: string; brief: Brief }) {
   if (brief.adrs.length === 0 && decisionDocs.length === 0) return null;
   return (
     <Section
-      title="Decisions & specs"
+      title={t("Decisions & specs")}
       icon={<LightbulbIcon />}
       bodyClassName="p-1"
     >

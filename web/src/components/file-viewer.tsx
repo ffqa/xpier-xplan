@@ -5,6 +5,7 @@ import { ErrorBlock, LoadingBlock } from "@/components/common";
 import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui/badge";
 import { ApiError, api } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import { useQuery } from "@/lib/query";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +37,7 @@ export function FileViewer({
             <button
               type="button"
               onClick={() => setRaw(!raw)}
-              title={raw ? "Rendered" : "Source"}
+              title={raw ? t("Rendered") : t("Source")}
               className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
             >
               {raw ? (
@@ -78,7 +79,9 @@ function FileError({ error }: { error: Error }) {
         <LockIcon className="size-6" />
         <p>{error.message}</p>
         <p>
-          xplan never serves secrets (.env, keys, certificates) to the browser.
+          {t(
+            "xplan never serves secrets (.env, keys, certificates) to the browser.",
+          )}
         </p>
       </div>
     );
@@ -86,7 +89,7 @@ function FileError({ error }: { error: Error }) {
   if (error instanceof ApiError && error.status === 415) {
     return (
       <div className="p-8 text-center text-xs text-muted-foreground">
-        Binary or oversized file — not shown.
+        {t("Binary or oversized file — not shown.")}
       </div>
     );
   }

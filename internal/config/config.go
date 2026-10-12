@@ -15,8 +15,8 @@ import (
 )
 
 // ReviewerDef describes how to invoke one agent CLI in a read-only mode.
-// Command is an argv template; the placeholders {prompt} and {path} are
-// substituted at run time. No shell is involved.
+// Command is an argv template; the placeholders {prompt}, {prompt_file},
+// {path} and {xplan_home} are substituted at run time. No shell is involved.
 type ReviewerDef struct {
 	Description string   `yaml:"description" json:"description"`
 	Command     []string `yaml:"command" json:"command"`
@@ -29,6 +29,8 @@ type Config struct {
 	ReviewTimeout        string                 `yaml:"review_timeout" json:"review_timeout"`
 	MaxConcurrentReviews int                    `yaml:"max_concurrent_reviews" json:"max_concurrent_reviews"`
 	DefaultReviewer      string                 `yaml:"default_reviewer" json:"default_reviewer"`
+	ReviewerOrder        []string               `yaml:"reviewer_order" json:"reviewer_order"`
+	Language             string                 `yaml:"language" json:"language"`
 	ReportLanguage       string                 `yaml:"report_language" json:"report_language"`
 	DefaultSchedule      map[string]string      `yaml:"default_schedule" json:"default_schedule"`
 	Reviewers            map[string]ReviewerDef `yaml:"reviewers" json:"reviewers"`
@@ -36,6 +38,28 @@ type Config struct {
 
 // FileName is the config file name inside the home directory.
 const FileName = "config.yaml"
+
+// AutoReviewer is the reviewer value that picks the first working preset in
+// ReviewerOrder at run time.
+const AutoReviewer = "auto"
+
+// Languages the UI and server messages support.
+var Languages = []string{"en", "zh"}
+
+// KimiAgentFile is the read-only agent profile xplan writes for kimi, relative
+// to the xplan home: kimi's -p mode auto-approves every tool it has, so the
+// profile is what limits it to Read/Grep/Glob.
+const KimiAgentFile = "agents/kimi-readonly.md"
+
+// KimiAgentProfile is the content of KimiAgentFile.
+const KimiAgentProfile = `---
+name: xplan-reviewer
+description: Read-only external reviewer started by xplan. It may read the project but never change it.
+tools: [Read, Grep, Glob]
+subagents: []
+---
+${base_prompt}
+`
 
 // ResolveHome returns the xplan home: explicit value, $XPLAN_HOME, or ~/.xplan.
 func ResolveHome(explicit string) (string, error) {
@@ -60,7 +84,9 @@ func Defaults() Config {
 		ScanInterval:         "15m",
 		ReviewTimeout:        "20m",
 		MaxConcurrentReviews: 2,
-		DefaultReviewer:      "cursor-agent",
+		DefaultReviewer:      AutoReviewer,
+		ReviewerOrder:        []string{"cursor-agent", "codex", "claude", "kimi", "gemini", "qwen", "opencode", "kiro", "omp"},
+		Language:             "en",
 		ReportLanguage:       "English",
 		DefaultSchedule: map[string]string{
 			"drift":    "weekly",
@@ -75,9 +101,11 @@ func Defaults() Config {
 				Command:     []string{"cursor-agent", "-p", "--output-format", "text", "--mode", "ask", "--trust", "--workspace", "{path}", "{prompt}"},
 			},
 			"claude": {
-				Description: "Claude Code print mode limited to Read/Grep/Glob",
+				Description: "Claude Code print mode limited to Read/Grep/Glob, without MCP servers",
 				// The tool flags are variadic: "=" keeps them from swallowing the prompt.
-				Command: []string{"claude", "-p", "{prompt}", "--allowedTools=Read,Grep,Glob", "--disallowedTools=Edit,Write,Bash,NotebookEdit"},
+				// --tools is the hard allowlist; --allowedTools alone still lets
+				// tools the user's own settings allow (Bash, MCP writers) through.
+				Command: []string{"claude", "-p", "{prompt}", "--tools=Read,Grep,Glob", "--allowedTools=Read,Grep,Glob", "--disallowedTools=Edit,Write,Bash,NotebookEdit", "--strict-mcp-config"},
 			},
 			"codex": {
 				Description: "Codex exec in read-only sandbox",
@@ -87,8 +115,38 @@ func Defaults() Config {
 				Description: "omp print mode with read-only tools",
 				Command:     []string{"omp", "-p", "--no-session", "--cwd", "{path}", "--tools", "read,grep,glob", "{prompt}"},
 			},
+			"kimi": {
+				Description: "Kimi Code prompt mode with a Read/Grep/Glob-only agent profile",
+				Command:     []string{"kimi", "-p", "{prompt}", "--agent-file", "{xplan_home}/" + KimiAgentFile},
+			},
+			"gemini": {
+				Description: "Gemini CLI headless mode; approval-required tools are denied",
+				Command:     []string{"gemini", "-p", "{prompt}", "--approval-mode", "default"},
+			},
+			"qwen": {
+				Description: "Qwen Code headless mode; approval-required tools are denied",
+				Command:     []string{"qwen", "-p", "{prompt}", "--approval-mode", "default"},
+			},
+			"opencode": {
+				Description: "OpenCode run with the read-only plan agent",
+				Command:     []string{"opencode", "run", "--agent", "plan", "{prompt}"},
+			},
+			"kiro": {
+				Description: "Kiro CLI non-interactive chat trusting only fs_read",
+				Command:     []string{"kiro-cli", "chat", "--no-interactive", "--trust-tools=fs_read", "{prompt}"},
+			},
 		},
 	}
+}
+
+// IsLanguage reports whether value is a supported UI language.
+func IsLanguage(value string) bool {
+	return slices.Contains(Languages, value)
+}
+
+// EnsureAgentFiles writes the helper files some presets point at.
+func EnsureAgentFiles(home string) error {
+	return WriteFileAtomic(filepath.Join(home, KimiAgentFile), []byte(KimiAgentProfile))
 }
 
 // Load reads <home>/config.yaml, creating it with defaults on first run.
@@ -134,6 +192,12 @@ func merge(dst, src *Config) {
 	if src.DefaultReviewer != "" {
 		dst.DefaultReviewer = src.DefaultReviewer
 	}
+	if len(src.ReviewerOrder) > 0 {
+		dst.ReviewerOrder = src.ReviewerOrder
+	}
+	if IsLanguage(src.Language) {
+		dst.Language = src.Language
+	}
 	if src.ReportLanguage != "" {
 		dst.ReportLanguage = src.ReportLanguage
 	}
@@ -151,8 +215,12 @@ func merge(dst, src *Config) {
 // legacyPresets lists built-in commands that earlier versions wrote into
 // config.yaml and that are known to be broken.
 var legacyPresets = map[string][][]string{
-	// --disallowedTools is variadic and swallowed the prompt.
-	"claude": {{"claude", "-p", "--allowedTools", "Read,Grep,Glob", "--disallowedTools", "Edit,Write,Bash,NotebookEdit", "{prompt}"}},
+	"claude": {
+		// --disallowedTools is variadic and swallowed the prompt.
+		{"claude", "-p", "--allowedTools", "Read,Grep,Glob", "--disallowedTools", "Edit,Write,Bash,NotebookEdit", "{prompt}"},
+		// No hard tool allowlist and the user's MCP servers stayed loaded.
+		{"claude", "-p", "{prompt}", "--allowedTools=Read,Grep,Glob", "--disallowedTools=Edit,Write,Bash,NotebookEdit"},
+	},
 	// omp has no "ls" tool and rejects the whole list.
 	"omp": {{"omp", "-p", "--no-session", "--cwd", "{path}", "--tools", "read,grep,find,ls", "{prompt}"}},
 }
@@ -193,6 +261,35 @@ func (c *Config) ReviewerNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// AutoCandidates returns the reviewers "auto" may pick, in order: the
+// configured ReviewerOrder first, then every other preset alphabetically, so
+// presets added later are never left out.
+func (c *Config) AutoCandidates() []string {
+	candidates := []string{}
+	seen := map[string]bool{}
+	for _, name := range c.ReviewerOrder {
+		if _, ok := c.Reviewers[name]; ok && !seen[name] {
+			candidates = append(candidates, name)
+			seen[name] = true
+		}
+	}
+	for _, name := range c.ReviewerNames() {
+		if !seen[name] {
+			candidates = append(candidates, name)
+		}
+	}
+	return candidates
+}
+
+// IsReviewer reports whether name is a configured preset or "auto".
+func (c *Config) IsReviewer(name string) bool {
+	if name == AutoReviewer {
+		return true
+	}
+	_, ok := c.Reviewers[name]
+	return ok
 }
 
 func parseDurationOr(value string, fallback time.Duration) time.Duration {

@@ -3,6 +3,8 @@ import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 import { jobActive } from "@/lib/format";
+import { t } from "@/lib/i18n";
+import { jobReviewer } from "@/lib/reviewers";
 import { invalidate, useQuery } from "@/lib/query";
 import { refreshProject } from "@/lib/ui-state";
 
@@ -32,16 +34,20 @@ export function useIntentDraft(slug: string) {
     watched.current = null;
     refreshProject(slug);
     if (job.status === "done")
-      toast.success(job.summary || "Intent draft ready");
+      toast.success(job.summary || t("Intent draft ready"));
     else if (job.status === "failed")
-      toast.error(job.error || "Intent draft failed");
+      toast.error(job.error || t("Intent draft failed"));
   }, [job, running, slug]);
 
   const start = async () => {
     setStarting(true);
     try {
       const created = await api.startReview(slug, "intent");
-      toast.info(`Drafting the intent with ${created.reviewer} (read-only)…`);
+      toast.info(
+        t("Drafting the intent with {reviewer} (read-only)…", {
+          reviewer: jobReviewer(created),
+        }),
+      );
       invalidate(`reviews:${slug}`, "overview");
     } catch (error) {
       toast.error((error as Error).message);

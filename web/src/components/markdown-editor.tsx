@@ -10,6 +10,7 @@ import {
 import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/misc";
+import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type Mode = "edit" | "split" | "preview";
@@ -85,34 +86,34 @@ export function MarkdownEditor({
               dirty ? "text-warn" : "text-muted-foreground",
             )}
           >
-            {dirty ? "Unsaved changes" : "Saved"}
+            {dirty ? t("Unsaved changes") : t("Saved")}
           </span>
           <div className="flex rounded-md border p-0.5">
             <ModeButton
               active={mode === "edit"}
               onClick={() => changeMode("edit")}
-              label="Edit"
+              label={t("Edit")}
             >
               <PencilIcon />
             </ModeButton>
             <ModeButton
               active={mode === "split"}
               onClick={() => changeMode("split")}
-              label="Split"
+              label={t("Split")}
             >
               <ColumnsIcon />
             </ModeButton>
             <ModeButton
               active={mode === "preview"}
               onClick={() => changeMode("preview")}
-              label="Preview"
+              label={t("Preview")}
             >
               <EyeIcon />
             </ModeButton>
           </div>
           {dirty && (
             <Button variant="ghost" size="xs" onClick={() => setDraft(value)}>
-              Revert
+              {t("Revert")}
             </Button>
           )}
           <Button
@@ -121,7 +122,7 @@ export function MarkdownEditor({
             onClick={() => void onSave(draft)}
           >
             {saving ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
-            Save{" "}
+            {t("Save")}{" "}
             <Kbd className="h-4 border-primary-foreground/30 bg-transparent text-primary-foreground/80">
               ⌘S
             </Kbd>

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ffqa/xpier-xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/i18n"
 	"github.com/ffqa/xpier-xplan/internal/insight"
 	"github.com/ffqa/xpier-xplan/internal/project"
 	"github.com/ffqa/xpier-xplan/internal/review"
@@ -19,7 +20,7 @@ import (
 )
 
 // Version is overridden at build time via -ldflags.
-var Version = "0.2.0"
+var Version = "0.3.0"
 
 // App is the shared service.
 type App struct {
@@ -40,6 +41,10 @@ func New(ctx context.Context, home string, logger *log.Logger) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := config.EnsureAgentFiles(home); err != nil {
+		return nil, err
+	}
+	i18n.SetLanguage(cfg.Language)
 	application := &App{Home: home, Logger: logger, cfg: cfg}
 	application.Store = project.NewStore(home, cfg.DefaultSchedule)
 	application.Reviews = review.NewManager(ctx, application.Store, application.Config, logger)
@@ -63,16 +68,26 @@ func (a *App) UpdateConfig(mutate func(*config.Config) error) (*config.Config, e
 	for name, def := range a.cfg.Reviewers {
 		next.Reviewers[name] = def
 	}
+	next.ReviewerOrder = append([]string(nil), a.cfg.ReviewerOrder...)
 	if err := mutate(&next); err != nil {
 		return nil, err
 	}
-	if _, ok := next.Reviewers[next.DefaultReviewer]; !ok {
+	if !next.IsReviewer(next.DefaultReviewer) {
 		return nil, fmt.Errorf("%w: default reviewer %q is not configured", project.ErrInvalid, next.DefaultReviewer)
+	}
+	if !config.IsLanguage(next.Language) {
+		return nil, fmt.Errorf("%w: language must be one of %v", project.ErrInvalid, config.Languages)
+	}
+	for _, name := range next.ReviewerOrder {
+		if _, ok := next.Reviewers[name]; !ok {
+			return nil, fmt.Errorf("%w: reviewer_order contains unknown reviewer %q", project.ErrInvalid, name)
+		}
 	}
 	if err := config.Save(a.Home, &next); err != nil {
 		return nil, err
 	}
 	a.cfg = &next
+	i18n.SetLanguage(next.Language)
 	return a.cfg, nil
 }
 
@@ -245,17 +260,17 @@ func (a *App) draftIntentIfMissing(target *project.Project) DraftOutcome {
 		return outcome
 	}
 	if facts.IntentFilled {
-		outcome.Code, outcome.Reason = "filled", "intent already written"
+		outcome.Code, outcome.Reason = "filled", i18n.T("intent already written")
 		return outcome
 	}
 	if !insight.Established(target, facts.Snapshot) {
-		outcome.Code, outcome.Reason = "new", "started together with its xplan entry: write this one yourself"
+		outcome.Code, outcome.Reason = "new", i18n.T("started together with its xplan entry: write this one yourself")
 		return outcome
 	}
 	job, err := a.Reviews.Enqueue(target.Slug, review.KindIntent, "", "bulk")
 	switch {
 	case errors.Is(err, review.ErrAlreadyActive):
-		outcome.Code, outcome.Reason, outcome.JobID = "running", "a draft is already running", job.ID
+		outcome.Code, outcome.Reason, outcome.JobID = "running", i18n.T("a draft is already running"), job.ID
 	case err != nil:
 		outcome.Code, outcome.Reason = "error", err.Error()
 	default:

@@ -7,7 +7,8 @@ import {
 
 import { HealthDot, StatusDot, VerdictDots } from "@/components/status";
 import { Progress } from "@/components/ui/misc";
-import { ago, levelText, percent, statusLabel } from "@/lib/format";
+import { ago, levelText, percent, statusLabel, timeAgo } from "@/lib/format";
+import { t } from "@/lib/i18n";
 import { routeHref } from "@/lib/route";
 import type { Card } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -54,11 +55,11 @@ export function ProjectCard({
       {card.last_park ? (
         <div className="rounded-md bg-muted/50 px-2 py-1.5 text-[12px] leading-snug">
           <span className="text-muted-foreground">
-            Parked {ago(card.last_park.at)} ago ·{" "}
+            {t("Parked {time}", { time: timeAgo(card.last_park.at) })} ·{" "}
           </span>
           {card.last_park.next ? (
             <>
-              <span className="text-muted-foreground">next: </span>
+              <span className="text-muted-foreground">{t("next:")} </span>
               {card.last_park.next}
             </>
           ) : (
@@ -68,7 +69,7 @@ export function ProjectCard({
       ) : (
         !compact && (
           <div className="rounded-md border border-dashed px-2 py-1.5 text-[12px] text-muted-foreground">
-            No park note yet
+            {t("No park note yet")}
           </div>
         )
       )}
@@ -76,7 +77,10 @@ export function ProjectCard({
       {checklist.total > 0 && (
         <div
           className="flex items-center gap-2"
-          title={`${checklist.done}/${checklist.total} checklist items done across docs`}
+          title={t("{done}/{total} checklist items done across docs", {
+            done: checklist.done,
+            total: checklist.total,
+          })}
         >
           <ListChecksIcon className="size-3 text-muted-foreground" />
           <Progress
@@ -109,12 +113,15 @@ export function ProjectCard({
           </span>
         )}
         {card.xteam_open > 0 && (
-          <span className="flex items-center gap-1" title="Open xteam slices">
+          <span
+            className="flex items-center gap-1"
+            title={t("Open xteam slices")}
+          >
             <UsersIcon className="size-3" />
             {card.xteam_open}
           </span>
         )}
-        <span className="ml-auto" title="Last commit">
+        <span className="ml-auto" title={t("Last commit")}>
           {ago(card.last_commit_at)}
         </span>
       </div>

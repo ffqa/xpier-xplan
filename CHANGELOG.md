@@ -3,6 +3,39 @@
 All notable changes to xplan are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-10-12
+
+### Added
+
+- Simplified Chinese: the whole UI plus console replies, health flags,
+  reviewer status, review kind names and job errors. Switch with the status
+  bar button or Settings → Language; the choice is saved as `language` in
+  `config.yaml` and shared by every browser.
+- Report language presets (English, Simplified Chinese) in Settings.
+- Reviewer presets for `kimi`, `gemini`, `qwen`, `opencode` and `kiro`, each
+  in a read-only mode (kimi uses a generated Read/Grep/Glob-only agent profile
+  under `~/.xplan/agents/`). New `{xplan_home}` placeholder.
+- `auto` reviewer, now the default: picks the first working preset in
+  `reviewer_order`, skips presets that are missing or not logged in, and moves
+  on when a real run hits a login wall. Jobs record `reviewer_requested` and
+  the skipped presets in `attempts`.
+- Reviewer health (`~/.xplan/reviewers-health.json`) from smoke tests and real
+  runs, with `POST /api/reviewers/{name}/test` and `POST /api/reviewers/test`.
+  Settings → Reviewer agents shows health, the last check, Test / Test all and
+  reorder arrows; the status bar shows `auto → <pick>`.
+- `npm run i18n:check` and a Go catalog test that fail on untranslated strings.
+
+### Changed
+
+- The `claude` preset adds a hard tool allowlist (`--tools=Read,Grep,Glob`) and
+  `--strict-mcp-config`, so tools allowed in the user's own Claude settings or
+  MCP servers cannot write. The previous built-in command is upgraded on load.
+- Go module path is `github.com/ffqa/xpier-xplan`.
+
+### Fixed
+
+- Reviewer error details no longer contain terminal color codes.
+
 ## [0.2.0] - 2026-10-11
 
 ### Added

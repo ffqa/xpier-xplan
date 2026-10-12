@@ -11,6 +11,8 @@ import { SplitHandle, useResizable } from "@/components/splitter";
 import { StatusBar } from "@/components/status-bar";
 import { TitleBar } from "@/components/title-bar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useLanguage } from "@/lib/i18n";
+import { useServerLanguage } from "@/lib/language";
 import { useRoute } from "@/lib/route";
 import { UIProvider, useUI } from "@/lib/ui-state";
 import { BoardView } from "@/views/board-view";
@@ -23,7 +25,7 @@ export default function App() {
   return (
     <UIProvider>
       <TooltipProvider delay={400}>
-        <Shell />
+        <LocalizedShell />
         <Toaster
           theme="dark"
           position="bottom-right"
@@ -34,6 +36,13 @@ export default function App() {
       </TooltipProvider>
     </UIProvider>
   );
+}
+
+/** Re-mounts the shell on a language switch so every t() call re-runs. */
+function LocalizedShell() {
+  const language = useLanguage();
+  useServerLanguage();
+  return <Shell key={language} />;
 }
 
 function Shell() {

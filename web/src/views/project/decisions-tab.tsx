@@ -14,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
-import { ago } from "@/lib/format";
+import { timeAgo } from "@/lib/format";
+import { t } from "@/lib/i18n";
 import { invalidate, useQuery } from "@/lib/query";
 import { navigate, routeHref } from "@/lib/route";
 import type { ADR, Brief, Doc } from "@/lib/types";
@@ -51,11 +52,14 @@ export function DecisionsTab({
       <aside className="flex w-72 shrink-0 flex-col border-r">
         <NewADR slug={slug} />
         <div className="min-h-0 flex-1 overflow-y-auto pb-2">
-          <ListHeader>xplan decisions · {list.length}</ListHeader>
+          <ListHeader>
+            {t("xplan decisions · {count}", { count: list.length })}
+          </ListHeader>
           {list.length === 0 && (
             <p className="px-3 py-1 text-xs text-muted-foreground">
-              Record why you chose something, so future-you doesn&apos;t
-              re-litigate it.
+              {t(
+                "Record why you chose something, so future-you doesn't re-litigate it.",
+              )}
             </p>
           )}
           {list.map((adr) => (
@@ -66,10 +70,12 @@ export function DecisionsTab({
               active={adr.id === arg}
             />
           ))}
-          <ListHeader>In the project · {projectDocs.length}</ListHeader>
+          <ListHeader>
+            {t("In the project · {count}", { count: projectDocs.length })}
+          </ListHeader>
           {projectDocs.length === 0 && (
             <p className="px-3 py-1 text-xs text-muted-foreground">
-              No ADR or spec files found in the repository.
+              {t("No ADR or spec files found in the repository.")}
             </p>
           )}
           {projectDocs.map((doc) => (
@@ -88,11 +94,12 @@ export function DecisionsTab({
         {!selectedADR && !selectedDoc && (
           <Empty
             icon={<LightbulbIcon />}
-            title="Pick a decision"
+            title={t("Pick a decision")}
             className="h-full"
           >
-            xplan decisions live outside the repository, so they survive branch
-            switches and stay yours. Project ADRs and specs are shown read-only.
+            {t(
+              "xplan decisions live outside the repository, so they survive branch switches and stay yours. Project ADRs and specs are shown read-only.",
+            )}
           </Empty>
         )}
       </div>
@@ -136,7 +143,7 @@ function NewADR({ slug }: { slug: string }) {
       <Input
         value={title}
         onChange={(event) => setTitle(event.target.value)}
-        placeholder="New decision title"
+        placeholder={t("New decision title")}
         className="h-7 text-[12.5px]"
       />
       <Button type="submit" size="icon-sm" disabled={busy || !title.trim()}>
@@ -220,7 +227,7 @@ function ADREditor({ slug, adr }: { slug: string; adr: ADR }) {
     setSaving(true);
     try {
       await api.saveADR(slug, adr.id, content);
-      toast.success("Decision saved");
+      toast.success(t("Decision saved"));
       invalidate(`adrs:${slug}`, `brief:${slug}`);
     } catch (error) {
       toast.error((error as Error).message);
@@ -242,8 +249,10 @@ function ADREditor({ slug, adr }: { slug: string; adr: ADR }) {
           </span>
           <StatusBadge status={adr.status} />
           <span className="text-[11px] text-muted-foreground">
-            edited {ago(adr.updated_at)} ago · change “Status:” in the text to
-            accept or supersede
+            {t(
+              "edited {time} · change “Status:” in the text to accept or supersede",
+              { time: timeAgo(adr.updated_at) },
+            )}
           </span>
         </>
       }
@@ -266,7 +275,7 @@ function ProjectDocViewer({ slug, doc }: { slug: string; doc: Doc }) {
           })}
           className="text-[11px] text-primary hover:underline"
         >
-          Open in Docs
+          {t("Open in Docs")}
         </a>
       }
     />

@@ -23,9 +23,18 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tip } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
-import { ago, dateTime, duration, jobActive, jobTitle } from "@/lib/format";
+import {
+  dateTime,
+  duration,
+  jobActive,
+  jobTitle,
+  kindLabel,
+  timeAgo,
+} from "@/lib/format";
+import { t, tn } from "@/lib/i18n";
 import { projectFileResolver } from "@/lib/links";
 import { invalidate, useQuery } from "@/lib/query";
+import { jobReviewer } from "@/lib/reviewers";
 import { navigate, routeHref } from "@/lib/route";
 import type { Finding, Job, Severity } from "@/lib/types";
 import { refreshProject, useMeta } from "@/lib/ui-state";
@@ -33,6 +42,13 @@ import { cn } from "@/lib/utils";
 
 const severityOrder: Severity[] = ["critical", "high", "medium", "low", "info"];
 const reportLabel: Record<string, string> = { ask: "Answer", intent: "Draft" };
+const severityCount: Record<Severity, string> = {
+  critical: "{count} critical",
+  high: "{count} high",
+  medium: "{count} medium",
+  low: "{count} low",
+  info: "{count} info",
+};
 
 /** Read-only external reviews: run, watch, and read the findings. */
 export function ReviewsTab({
@@ -64,8 +80,9 @@ export function ReviewsTab({
         <div className="min-h-0 flex-1 overflow-y-auto py-1">
           {jobs.length === 0 && (
             <p className="p-3 text-xs text-muted-foreground">
-              No reviews yet. Start with Drift: it checks whether the code still
-              serves the intent.
+              {t(
+                "No reviews yet. Start with Drift: it checks whether the code still serves the intent.",
+              )}
             </p>
           )}
           {jobs.map((job) => (
@@ -89,11 +106,12 @@ export function ReviewsTab({
         ) : (
           <Empty
             icon={<FileSearchIcon />}
-            title="No review selected"
+            title={t("No review selected")}
             className="h-full"
           >
-            Reviews run an agent in read-only mode against the project, with
-            xplan&apos;s intent, decisions and progress as context.
+            {t(
+              "Reviews run an agent in read-only mode against the project, with xplan's intent, decisions and progress as context.",
+            )}
           </Empty>
         )}
       </div>
@@ -113,8 +131,11 @@ function RunBar({ slug }: { slug: string }) {
       const job = await api.startReview(slug, kind, text);
       toast.success(
         kind === "ask"
-          ? `Asked ${job.reviewer}`
-          : `${kind} review queued with ${job.reviewer}`,
+          ? t("Asked {reviewer}", { reviewer: jobReviewer(job) })
+          : t("{kind} review queued with {reviewer}", {
+              kind: kindLabel(kind),
+              reviewer: jobReviewer(job),
+            }),
       );
       if (kind === "ask") setQuestion("");
       refreshProject(slug);
@@ -143,7 +164,7 @@ function RunBar({ slug }: { slug: string }) {
               ) : (
                 <KindIcon kind={kind.id} />
               )}
-              <span className="capitalize">{kind.id}</span>
+              <span className="capitalize">{kindLabel(kind.id)}</span>
             </Button>
           </Tip>
         ))}
@@ -158,7 +179,7 @@ function RunBar({ slug }: { slug: string }) {
         <Input
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder="Ask the reviewer about this project…"
+          placeholder={t("Ask the reviewer about this project…")}
           className="h-7 text-[12.5px]"
         />
         <Button
@@ -197,7 +218,7 @@ function JobRow({
     >
       <span className="flex items-center gap-2">
         <KindIcon kind={job.kind} className="text-muted-foreground" />
-        <span className="text-[12.5px] capitalize">{job.kind}</span>
+        <span className="text-[12.5px] capitalize">{kindLabel(job.kind)}</span>
         <span className="ml-auto">
           {job.status === "done" ? (
             <VerdictBadge verdict={job.verdict} kind={job.kind} />
@@ -209,10 +230,11 @@ function JobRow({
       <span className="truncate pl-5.5 text-[11px] text-muted-foreground">
         {job.kind === "ask"
           ? job.question
-          : job.summary || `${job.findings.length} findings`}
+          : job.summary ||
+            tn(job.findings.length, "{count} finding", "{count} findings")}
       </span>
       <span className="pl-5.5 text-[10.5px] text-muted-foreground/70">
-        {ago(job.created_at)} ago · {job.trigger} · {job.reviewer}
+        {timeAgo(job.created_at)} · {t(job.trigger)} · {jobReviewer(job)}
       </span>
     </a>
   );
@@ -248,7 +270,7 @@ function JobDetail({
   const cancel = async () => {
     try {
       await api.cancelReview(slug, id);
-      toast.success("Cancel requested");
+      toast.success(t("Cancel requested"));
       invalidate(`review:${slug}:${id}`, `reviews:${slug}`);
     } catch (error) {
       toast.error((error as Error).message);
@@ -273,7 +295,9 @@ function JobDetail({
             <JobStatusBadge status={job.status} />
           )}
           {typeof job.score === "number" && job.score > 0 && (
-            <Badge variant="outline">score {job.score}/100</Badge>
+            <Badge variant="outline">
+              {t("score {score}/100", { score: job.score })}
+            </Badge>
           )}
           {running && (
             <Button
@@ -283,7 +307,7 @@ function JobDetail({
               onClick={() => void cancel()}
             >
               <CircleStopIcon />
-              Cancel
+              {t("Cancel")}
             </Button>
           )}
           {!running && job.kind === "intent" && job.status === "done" && (
@@ -295,32 +319,50 @@ function JobDetail({
               )}
             >
               <TargetIcon />
-              Open the Intent tab
+              {t("Open the Intent tab")}
             </a>
           )}
         </header>
 
         <div className="grid grid-cols-2 gap-3 rounded-lg border bg-card/60 p-3 sm:grid-cols-4">
-          <Stat label="Reviewer" value={job.reviewer} />
+          <Stat label={t("Reviewer")} value={jobReviewer(job)} />
           <Stat
-            label="Started"
+            label={t("Started")}
             value={dateTime(job.started_at ?? job.created_at)}
           />
           <Stat
-            label="Duration"
+            label={t("Duration")}
             value={duration(job.started_at ?? job.created_at, job.finished_at)}
           />
           <Stat
-            label="Trigger"
-            value={job.trigger}
-            hint={`${job.prompt_chars.toLocaleString()} prompt characters`}
+            label={t("Trigger")}
+            value={t(job.trigger)}
+            hint={tn(
+              job.prompt_chars,
+              "{count} prompt character",
+              "{count} prompt characters",
+              { count: job.prompt_chars.toLocaleString() },
+            )}
           />
         </div>
+
+        {job.attempts && job.attempts.length > 0 && (
+          <div className="rounded-lg border bg-card/60 p-3">
+            <div className="mb-1 text-[11px] text-muted-foreground">
+              {t("Skipped by auto before picking a reviewer")}
+            </div>
+            <ul className="space-y-0.5 font-mono text-[11.5px] text-muted-foreground">
+              {job.attempts.map((attempt) => (
+                <li key={attempt}>{attempt}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {job.question && (
           <div className="rounded-lg border bg-card/60 p-3 text-[13px]">
             <div className="mb-1 text-[11px] text-muted-foreground">
-              You asked
+              {t("You asked")}
             </div>
             {job.question}
           </div>
@@ -330,8 +372,11 @@ function JobDetail({
           <div className="flex items-center gap-2 rounded-lg border border-info/30 bg-info/5 p-3 text-[13px] text-info">
             <Loader2Icon className="size-4 animate-spin" />
             {job.status === "queued"
-              ? "Waiting for a free review slot…"
-              : `${job.reviewer} is reading the project (read-only). This usually takes a few minutes.`}
+              ? t("Waiting for a free review slot…")
+              : t(
+                  "{reviewer} is reading the project (read-only). This usually takes a few minutes.",
+                  { reviewer: jobReviewer(job) },
+                )}
           </div>
         )}
 
@@ -344,16 +389,16 @@ function JobDetail({
         {job.tree_changed && (
           <div className="flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/5 p-3 text-[12.5px] text-warn">
             <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
-            The project&apos;s working tree changed while this review ran. That
-            may be you editing in parallel — or the agent writing despite
-            read-only mode. Check git status.
+            {t(
+              "The project's working tree changed while this review ran. That may be you editing in parallel — or the agent writing despite read-only mode. Check git status.",
+            )}
           </div>
         )}
 
         {job.summary && job.kind !== "ask" && (
           <div className="rounded-lg border bg-card/60 p-3">
             <div className="mb-1 text-[11px] text-muted-foreground">
-              Summary
+              {t("Summary")}
             </div>
             <p className="text-[13px]">{job.summary}</p>
           </div>
@@ -368,7 +413,7 @@ function JobDetail({
           >
             <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase select-none">
               <ChevronRightIcon className="size-3 transition-transform group-open:rotate-90" />
-              {reportLabel[job.kind] ?? "Full report"}
+              {t(reportLabel[job.kind] ?? "Full report")}
             </summary>
             <div className="border-t p-4">
               <Markdown resolveHref={resolveHref}>
@@ -400,13 +445,11 @@ function FindingsTable({ findings }: { findings: Finding[] }) {
     <section className="rounded-lg border bg-card/60">
       <header className="flex items-center gap-2 border-b px-3 py-2">
         <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-          Findings · {findings.length}
+          {t("Findings · {count}", { count: findings.length })}
         </span>
         <span className="ml-auto flex gap-2 text-[11px] text-muted-foreground">
           {counts.map(([severity, count]) => (
-            <span key={severity}>
-              {count} {severity}
-            </span>
+            <span key={severity}>{t(severityCount[severity], { count })}</span>
           ))}
         </span>
       </header>
@@ -453,7 +496,9 @@ function FindingRow({ finding }: { finding: Finding }) {
           )}
           {finding.suggestion && (
             <p className="whitespace-pre-wrap text-muted-foreground">
-              <span className="font-medium text-foreground">Suggestion: </span>
+              <span className="font-medium text-foreground">
+                {t("Suggestion:")}{" "}
+              </span>
               {finding.suggestion}
             </p>
           )}
