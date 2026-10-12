@@ -32,7 +32,7 @@ flowchart LR
 | Scanner         | Git activity, docs by kind, checklist progress, `.xteam` slices, stack           |
 | Health          | Flags such as "intent not written", "active but stale", "review needs attention" |
 | Re-entry brief  | Intent → park note → what changed since your last visit → health → reviews       |
-| Reviews         | Read-only agent reviews: drift, code, security, deploy, test, ask                |
+| Reviews         | Read-only agent reviews: drift, code, security, deploy, test, ask, intent drafts |
 | Console         | Slash commands and free-form questions per project                               |
 | Web UI          | IDE layout: sidebar, tabs, board, inbox, palette (⌘K), console (⌘J)              |
 
@@ -76,10 +76,52 @@ returns `204`.
   preview; ⌘S saves).
   - `GET /api/projects/{slug}/intent` → `{"content": "..."}`
   - `PUT /api/projects/{slug}/intent` with `{"content": "..."}` → `200`
+- **Intent drafts for existing projects**: new projects get their intent from
+  the owner; projects that existed before they were registered can have the
+  reviewer reconstruct it first (see 3.1).
 - **ADRs** (`adr/NNNN-title.md`): portfolio-level decisions. The Decisions tab
   also lists the project's own ADR and spec documents (read-only).
   - `POST /api/projects/{slug}/adrs` with `{"title": "...", "context": "..."}` → `201`
   - `PUT /api/projects/{slug}/adrs/{id}` with `{"content": "..."}` → `200`
+
+### 3.1 Intent drafts
+
+```mermaid
+flowchart TD
+  T[Draft from history<br/>Brief / Intent tab / Overview bulk / console /draft-intent] --> Q{Bulk?}
+  Q -- yes --> E{First commit older than<br/>registration by 2+ days?}
+  E -- no --> S[Skip: new project, owner writes it]
+  E -- yes --> J
+  Q -- no --> J[intent job: read-only agent<br/>README, docs, earliest commits, git history]
+  J --> X{Answer has a Why section?}
+  X -- no --> F[Job failed, nothing written]
+  X -- yes --> D[Clean draft: canonical headings + Draft line]
+  D --> W{intent.md already written?}
+  W -- no --> I[Write draft to intent.md<br/>health: intent_draft]
+  W -- yes --> K[Keep owner's text<br/>Intent tab offers Load into editor]
+  I --> U[Owner corrects it and deletes the Draft line]
+  U --> OK[Intent confirmed: drift reviews trust it fully]
+```
+
+| Rule                                                                                           | Why                                                                                                  |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Only an **empty** intent is filled in; a written one is never overwritten                      | Your own words always win                                                                            |
+| The draft starts with a `> **Draft** — inferred by …` line                                     | Health shows `intent_draft` and drift reviews treat the intent as low-confidence until you delete it |
+| Bulk drafting only covers projects whose first commit is 2+ days older than their registration | Projects started together with their xplan entry are written by the owner                            |
+| The prompt includes the 15 earliest commits                                                    | The original motivation is usually in the first commits and the first README                         |
+
+- **Start one**: "Draft from history" in the Brief card or the Intent tab,
+  ⌘K → "Draft intent from history", `/draft-intent`, or
+  `POST /api/projects/{slug}/reviews` with `{"kind": "intent"}` → `202`.
+- **Start in bulk**: "Draft missing intents (N)" on the Overview, or
+  `POST /api/intent-drafts` → `202` with
+  `{"queued": [{"project", "code": "queued", "job_id"}], "skipped": [{"project", "code", "reason"}]}`.
+  `code` is `filled`, `new`, `running` or `error` for skipped projects.
+- **Result**: the job's report is the clean draft; `intent_written: true` means
+  it filled `intent.md`. `GET /api/projects/{slug}/intent` returns
+  `{"content", "filled", "draft"}`.
+- **Failure**: an answer without a `## Why` section fails the job and writes
+  nothing.
 
 ## 4. Scanner and health
 
@@ -96,7 +138,8 @@ on `/scan` and on `xplan scan`. It collects:
 
 `POST /api/projects/{slug}/scan` → `200` with `scanned_at` and counts.
 
-Health flags (most severe first): `path_missing` (crit), `no_intent`, `stale`
+Health flags (most severe first): `path_missing` (crit), `no_intent`,
+`intent_draft` (the intent still carries the agent's Draft line), `stale`
 (active but no commit for 14 days), `dirty` (more than 30 files is a warning),
 `review_<kind>` (latest verdict attention or critical), `review_failed_<kind>`,
 `no_park`, `xteam_open`, `never_scanned`.
@@ -138,6 +181,7 @@ flowchart TD
 | `deploy`   | Build, configuration, release and rollback readiness                               |
 | `test`     | Coverage of critical paths, flaky or missing tests                                 |
 | `ask`      | Free-form question (console plain text)                                            |
+| `intent`   | Intent draft for an existing project (no verdict; see 3.1)                         |
 
 - **Start**: `POST /api/projects/{slug}/reviews` with `{"kind": "drift"}` or
   `{"kind": "ask", "question": "..."}` → `202` with the job. `409` if the same
@@ -169,19 +213,20 @@ Placeholders: `{prompt}` (prompt text), `{prompt_file}` (path of the prompt file
 
 Open with ⌘J. Plain text asks the project's reviewer a read-only question.
 
-| Command      | Arguments                                  | Effect                      |
-| ------------ | ------------------------------------------ | --------------------------- |
-| `/review`    | `drift\|code\|security\|deploy\|test\|all` | Start reviews               |
-| `/ask`       | `<question>`                               | Same as plain text          |
-| `/park`      | `stopped [\| next] [\| open]`              | Leave a park note           |
-| `/note`      | `<text>`                                   | Journal note                |
-| `/adr`       | `<title>`                                  | Create an ADR               |
-| `/status`    | `active\|waiting\|blocked\|paused\|done`   | Move on the board           |
-| `/scan`      |                                            | Rescan now                  |
-| `/caught-up` |                                            | Record the visit            |
-| `/xteam`     | `<message>` or `status`                    | Ring the project's xteam PM |
-| `/open`      |                                            | Open the project in Cursor  |
-| `/help`      |                                            | List commands               |
+| Command         | Arguments                                  | Effect                              |
+| --------------- | ------------------------------------------ | ----------------------------------- |
+| `/review`       | `drift\|code\|security\|deploy\|test\|all` | Start reviews                       |
+| `/ask`          | `<question>`                               | Same as plain text                  |
+| `/park`         | `stopped [\| next] [\| open]`              | Leave a park note                   |
+| `/note`         | `<text>`                                   | Journal note                        |
+| `/adr`          | `<title>`                                  | Create an ADR                       |
+| `/draft-intent` |                                            | Reconstruct the intent from history |
+| `/status`       | `active\|waiting\|blocked\|paused\|done`   | Move on the board                   |
+| `/scan`         |                                            | Rescan now                          |
+| `/caught-up`    |                                            | Record the visit                    |
+| `/xteam`        | `<message>` or `status`                    | Ring the project's xteam PM         |
+| `/open`         |                                            | Open the project in Cursor          |
+| `/help`         |                                            | List commands                       |
 
 API: `POST /api/projects/{slug}/console` with `{"input": "..."}` →
 `{"ok", "output", "job_id"?, "job_ids"?, "refresh"?}`; `GET` returns
@@ -236,10 +281,29 @@ All API errors return `{"error": "message"}`:
 - The UI bundle is about 730 KB (225 KB gzipped). That is fine for a local tool,
   but Markdown rendering could be lazy-loaded.
 
+## 11. Retrospective (v0.2.0, intent drafts)
+
+**What went well**
+
+- Keeping the draft in the job report made "never overwrite" cheap: a written
+  intent stays untouched and the draft is one click away in the Intent tab.
+- The Draft line is plain Markdown, so the confirmation state needs no extra
+  field: deleting the line is the confirmation.
+
+**Problems found**
+
+- The first "existing project" rule (10+ commits) misjudged young but real
+  projects (`xpier-oauth` has 1 commit, `xpier-input-method` 4). Comparing the
+  first commit date with the registration date matches the intent better.
+- Agents wrap answers in preambles and code fences and drift on headings, so
+  the draft is normalized (fence unwrapped, preamble dropped, headings mapped by
+  their first word) before it is written.
+- `cursor-agent status` reported a login while runs failed with "Authentication
+  required" (see `docs/diary.md`).
+
 **Next ideas**
 
-- Let the reviewer draft `intent.md` from the README and history, for the user
-  to edit (every project currently shows "Intent not written yet").
-- Per-preset "test connection" button in Settings.
+- Per-preset "test connection" button in Settings, used before bulk drafts so a
+  broken reviewer fails once instead of once per project.
 - Finding lifecycle (acknowledge or dismiss) so the Inbox only shows new items.
 - A changing default schedule could offer to update existing projects.

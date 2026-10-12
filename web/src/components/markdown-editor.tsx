@@ -23,12 +23,18 @@ export function MarkdownEditor({
   onSave,
   saving,
   toolbarLeft,
+  banner,
+  replacement,
   storageKey,
 }: {
   value: string;
   onSave: (content: string) => Promise<void> | void;
   saving?: boolean;
   toolbarLeft?: React.ReactNode;
+  /** Shown between the toolbar and the editor. */
+  banner?: React.ReactNode;
+  /** Loads text into the editor as unsaved changes; bump nonce to reapply. */
+  replacement?: { content: string; nonce: number };
   storageKey: string;
 }) {
   const [draft, setDraft] = useState(value);
@@ -39,6 +45,10 @@ export function MarkdownEditor({
   const dirty = draft !== value;
 
   useEffect(() => setDraft(value), [value]);
+
+  useEffect(() => {
+    if (replacement) setDraft(replacement.content);
+  }, [replacement]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -113,6 +123,7 @@ export function MarkdownEditor({
           </Button>
         </div>
       </div>
+      {banner}
       <div className="flex min-h-0 flex-1">
         {mode !== "preview" && (
           <textarea

@@ -6,6 +6,7 @@ import {
   MessageCircleQuestionIcon,
   RocketIcon,
   ShieldCheckIcon,
+  WandSparklesIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -36,6 +37,7 @@ export const kindIcon: Record<string, LucideIcon> = {
   deploy: RocketIcon,
   test: FlaskConicalIcon,
   ask: MessageCircleQuestionIcon,
+  intent: WandSparklesIcon,
 };
 
 export function KindIcon({

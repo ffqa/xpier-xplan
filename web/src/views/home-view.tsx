@@ -1,10 +1,16 @@
-import { useMemo } from "react";
-import { FolderPlusIcon, RefreshCwIcon } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  FolderPlusIcon,
+  Loader2Icon,
+  RefreshCwIcon,
+  WandSparklesIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Empty, ErrorBlock, LoadingBlock } from "@/components/common";
 import { ProjectCard } from "@/components/project-card";
 import { Button } from "@/components/ui/button";
+import { Tip } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
 import { invalidate } from "@/lib/query";
 import type { Card } from "@/lib/types";
@@ -18,6 +24,28 @@ export function HomeView() {
   const overview = useOverview();
   const cards = overview.data?.cards ?? [];
   const sections = useMemo(() => buildSections(cards), [cards]);
+
+  const [drafting, setDrafting] = useState(false);
+  const draftable = cards.filter(
+    (card) => !card.intent_filled && card.established,
+  ).length;
+
+  const draftMissing = async () => {
+    setDrafting(true);
+    try {
+      const result = await api.draftIntents();
+      const fresh = result.skipped.filter((item) => item.code === "new").length;
+      toast.success(
+        `Drafting ${result.queued.length} intents (read-only).` +
+          (fresh ? ` ${fresh} new projects are left for you to write.` : ""),
+      );
+      invalidate("overview", "reviews:");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setDrafting(false);
+    }
+  };
 
   const rescanAll = async () => {
     const results = await Promise.allSettled(
@@ -64,10 +92,28 @@ export function HomeView() {
               re-entry brief.
             </p>
           </div>
+          {draftable > 0 && (
+            <Tip label="Projects that existed before you registered them, and still have no intent: the reviewer reconstructs why each was started, read-only. You correct the drafts. New projects are left for you to write.">
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto"
+                disabled={drafting}
+                onClick={() => void draftMissing()}
+              >
+                {drafting ? (
+                  <Loader2Icon className="animate-spin" />
+                ) : (
+                  <WandSparklesIcon />
+                )}
+                Draft missing intents ({draftable})
+              </Button>
+            </Tip>
+          )}
           <Button
             variant="outline"
             size="sm"
-            className="ml-auto"
+            className={draftable > 0 ? undefined : "ml-auto"}
             onClick={() => void rescanAll()}
           >
             <RefreshCwIcon />

@@ -27,6 +27,20 @@ Recurring problems and how they were resolved. Newest first.
 - **Symptom**: `Authentication required. Please run 'agent login' first`.
 - **Fix**: run `cursor-agent login` once in a terminal, or export
   `CURSOR_API_KEY`.
+- **Seen again (v0.2.0)**: `cursor-agent status` printed "Login successful!
+  Logged in (unable to fetch user details)", yet every run still failed with
+  the same error within 5 seconds. `status` is not proof; check with
+  `cursor-agent -p --mode ask "Reply with: pong"`. All four bulk intent drafts
+  on `cursor-agent` failed; they were rerun on `codex`.
+
+### Parallel edits to the same file
+
+- **Symptom**: several edits sent to one file at once came back with altered
+  text or "string not found".
+- **Cause**: each edit sees the file before the others land, and the Prettier
+  hook reflows Markdown tables and TypeScript after every write.
+- **Fix**: edit one file sequentially; parallelize only across different files.
+  Re-read the file after a hook may have reformatted it.
 
 ### Empty page on `127.0.0.1:7788`
 

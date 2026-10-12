@@ -46,6 +46,10 @@ export interface Card extends Project {
   health_level: Level;
   health: Flag[];
   intent_filled: boolean;
+  /** intent.md still carries the agent's "> **Draft**" line. */
+  intent_draft: boolean;
+  /** The first commit predates registration: an intent draft is offered. */
+  established: boolean;
   branch?: string;
   last_commit_at?: string;
   last_commit_subject?: string;
@@ -99,6 +103,8 @@ export interface GitInfo {
   dirty_sample: string[];
   commits_7d: number;
   commits_30d: number;
+  total_commits: number;
+  first_commit_at?: string;
   remote?: string;
   recent: Commit[];
 }
@@ -144,6 +150,8 @@ export interface Job {
   findings: Finding[];
   tree_changed: boolean;
   prompt_chars: number;
+  /** Intent drafts only: the draft filled an empty intent.md. */
+  intent_written?: boolean;
 }
 
 export interface ADR {
@@ -179,6 +187,21 @@ export interface ReviewKind {
   id: string;
   title: string;
   description: string;
+  /** Produces a verdict and findings (false for ask and intent drafts). */
+  review: boolean;
+}
+
+export interface Intent {
+  content: string;
+  filled: boolean;
+  draft: boolean;
+}
+
+export interface DraftOutcome {
+  project: string;
+  code: "queued" | "filled" | "new" | "running" | "error";
+  job_id?: string;
+  reason?: string;
 }
 
 export interface ReviewerInfo {

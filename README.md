@@ -13,6 +13,9 @@ asks a **read-only** agent to review the project from the outside.
 - **Re-entry brief**: intent → where you stopped → what changed since → health.
 - **External reviews**: drift (is the project still doing what it was started for?),
   code, security, deploy, test, or a free-form question.
+- **Intent drafts for existing projects**: you write the intent of a new project
+  yourself; for one that existed before xplan, the reviewer reconstructs it from
+  the README and git history and you correct it. A written intent is never overwritten.
 - **Read-only by design**: xplan never writes into a project, agents run in their
   read-only modes, and a guard flags any working-tree change made during a review.
 - **One binary**: Go backend with the React UI embedded. State is plain files.

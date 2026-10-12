@@ -34,6 +34,7 @@ type Facts struct {
 	Snapshot     *scanner.Snapshot
 	State        project.State
 	IntentFilled bool
+	IntentDraft  bool
 	LastPark     *project.Entry
 	LatestDone   map[string]*review.Job
 	LastAttempts map[string]*review.Job
@@ -42,6 +43,20 @@ type Facts struct {
 }
 
 const staleAfter = 14 * 24 * time.Hour
+
+// establishedMargin separates projects that existed before they were
+// registered (intent can be reconstructed from history) from projects started
+// together with their xplan entry (the owner writes the intent).
+const establishedMargin = 48 * time.Hour
+
+// Established reports whether the project's first commit predates its
+// registration in xplan by more than establishedMargin.
+func Established(target *project.Project, snapshot *scanner.Snapshot) bool {
+	if snapshot == nil || snapshot.Git == nil || snapshot.Git.FirstCommitAt == nil {
+		return false
+	}
+	return target.CreatedAt.Sub(*snapshot.Git.FirstCommitAt) > establishedMargin
+}
 
 // Health evaluates all flags for a project, most severe first.
 func Health(facts Facts) []Flag {
@@ -56,8 +71,11 @@ func Health(facts Facts) []Flag {
 	case !snapshot.PathExists:
 		add(LevelCrit, "path_missing", "Project directory is missing")
 	}
-	if !facts.IntentFilled {
+	switch {
+	case !facts.IntentFilled:
 		add(LevelWarn, "no_intent", "Intent not written yet — why does this project exist?")
+	case facts.IntentDraft:
+		add(LevelWarn, "intent_draft", "Intent is an agent's draft — correct it, then delete the Draft line")
 	}
 	if snapshot != nil && snapshot.PathExists {
 		if snapshot.Git == nil {

@@ -49,6 +49,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/inbox", s.handleInbox)
 	mux.HandleFunc("GET /api/reviews/active", s.handleActiveReviews)
 	mux.HandleFunc("POST /api/discover", s.handleDiscover)
+	mux.HandleFunc("POST /api/intent-drafts", s.handleDraftIntents)
 	mux.HandleFunc("POST /api/projects", s.handleAddProject)
 
 	mux.HandleFunc("GET /api/projects/{slug}", s.handleGetProject)

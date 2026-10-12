@@ -344,7 +344,7 @@ func (s *Server) handleGetIntent(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"content": content, "filled": project.IntentFilled(content)})
+	writeJSON(w, http.StatusOK, intentPayload(content))
 }
 
 func (s *Server) handlePutIntent(w http.ResponseWriter, r *http.Request) {
@@ -364,7 +364,24 @@ func (s *Server) handlePutIntent(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"content": body.Content, "filled": project.IntentFilled(body.Content)})
+	writeJSON(w, http.StatusOK, intentPayload(body.Content))
+}
+
+func intentPayload(content string) map[string]any {
+	return map[string]any{
+		"content": content,
+		"filled":  project.IntentFilled(content),
+		"draft":   project.IntentIsDraft(content),
+	}
+}
+
+func (s *Server) handleDraftIntents(w http.ResponseWriter, r *http.Request) {
+	queued, skipped, err := s.app.DraftMissingIntents()
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"queued": queued, "skipped": skipped})
 }
 
 func (s *Server) handleListADRs(w http.ResponseWriter, r *http.Request) {

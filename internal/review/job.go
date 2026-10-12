@@ -53,6 +53,9 @@ type Job struct {
 	Findings    []Finding  `json:"findings"`
 	TreeChanged bool       `json:"tree_changed"`
 	PromptChars int        `json:"prompt_chars"`
+	// IntentWritten is set by intent drafts that filled an empty intent.md;
+	// false means the owner's intent was kept and the draft is the report.
+	IntentWritten bool `json:"intent_written,omitempty"`
 }
 
 // Active reports whether the job is still queued or running.

@@ -306,7 +306,7 @@ function ProjectHeader({ brief }: { brief: Brief }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
             {(meta.data?.review_kinds ?? [])
-              .filter((kind) => kind.id !== "ask")
+              .filter((kind) => kind.review)
               .map((kind) => (
                 <DropdownMenuItem
                   key={kind.id}

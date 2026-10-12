@@ -312,6 +312,102 @@ func TestConsole(t *testing.T) {
 	env.expect("POST", "/api/projects/missing/console", map[string]string{"input": "/help"}, http.StatusNotFound)
 }
 
+// fakeIntentAnswer mimics an agent that ignores "no preamble, no fence" and
+// loosens the headings; the draft must still come out clean.
+const fakeIntentAnswer = "Here is the draft you asked for:\n\n```markdown\n# Intent — whatever\n\n" +
+	"## Why\n- Parallel projects lose their original idea.\n\n" +
+	"## Goal:\n- One place that remembers why each project exists.\n\n" +
+	"## Non-goals\n- Writing code into projects.\n\n## Sources\n- README.md\n```\n\nHope this helps."
+
+func TestIntentDraft(t *testing.T) {
+	env := newTestEnv(t)
+	slug := env.addProject()
+	base := "/api/projects/" + slug
+	t.Setenv("XPLAN_FAKE", fakeIntentAnswer)
+
+	bulk := env.expect("POST", "/api/intent-drafts", nil, http.StatusAccepted)
+	if queued, _ := bulk["queued"].([]any); len(queued) != 0 {
+		t.Fatalf("a project started with its xplan entry must not be drafted in bulk: %v", bulk)
+	}
+	skipped, _ := bulk["skipped"].([]any)
+	if len(skipped) != 1 || skipped[0].(map[string]any)["code"] != "new" {
+		t.Fatalf("skipped = %v, want the new project with code new", bulk["skipped"])
+	}
+
+	// Backdate the root commit: the project now existed long before it was registered.
+	old := []string{"GIT_COMMITTER_DATE=2026-01-01T00:00:00Z", "GIT_AUTHOR_DATE=2026-01-01T00:00:00Z"}
+	runInEnv(t, env.project, old, "git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--amend", "--no-edit")
+	env.expect("POST", base+"/scan", nil, http.StatusOK)
+	bulk = env.expect("POST", "/api/intent-drafts", nil, http.StatusAccepted)
+	queued, _ := bulk["queued"].([]any)
+	if len(queued) != 1 {
+		t.Fatalf("established project should be drafted: %v", bulk)
+	}
+	jobID, _ := queued[0].(map[string]any)["job_id"].(string)
+	if job := waitForJob(t, env, base, jobID); job["status"] != "done" || job["intent_written"] != true {
+		t.Fatalf("draft job = %v written=%v (%v)", job["status"], job["intent_written"], job["error"])
+	}
+
+	intent := env.expect("GET", base+"/intent", nil, http.StatusOK)
+	content, _ := intent["content"].(string)
+	if intent["filled"] != true || intent["draft"] != true {
+		t.Fatalf("drafted intent should be filled and marked draft: %v", intent)
+	}
+	for _, want := range []string{"# Intent — Demo\n", "> **Draft** — inferred by fake", "## Why (the problem)", "## Goal (north star)", "## Sources"} {
+		if !bytes.Contains([]byte(content), []byte(want)) {
+			t.Fatalf("draft missing %q:\n%s", want, content)
+		}
+	}
+	if bytes.Contains([]byte(content), []byte("Hope this helps")) || bytes.Contains([]byte(content), []byte("```")) {
+		t.Fatalf("draft should drop the agent's preamble and fence:\n%s", content)
+	}
+	brief := env.expect("GET", base+"/brief", nil, http.StatusOK)
+	card, _ := brief["card"].(map[string]any)
+	if card["intent_draft"] != true || card["established"] != true || !hasFlag(card, "intent_draft") {
+		t.Fatalf("card should flag the draft: %v", card["health"])
+	}
+
+	reviewed := "# Intent — Demo\n\n## Why (the problem)\n\nMy own words.\n"
+	saved := env.expect("PUT", base+"/intent", map[string]string{"content": reviewed}, http.StatusOK)
+	if saved["draft"] != false {
+		t.Fatalf("intent without the marker is no longer a draft")
+	}
+	again := env.expect("POST", base+"/console", map[string]string{"input": "/draft-intent"}, http.StatusOK)
+	againID, _ := again["job_id"].(string)
+	if again["ok"] != true || againID == "" {
+		t.Fatalf("/draft-intent: %v", again)
+	}
+	if job := waitForJob(t, env, base, againID); job["status"] != "done" || job["intent_written"] != nil {
+		t.Fatalf("second draft = %v written=%v, want done and not written", job["status"], job["intent_written"])
+	}
+	if kept := env.expect("GET", base+"/intent", nil, http.StatusOK); kept["content"] != reviewed {
+		t.Fatalf("a written intent must never be overwritten by a draft")
+	}
+	detail := env.expect("GET", base+"/reviews/"+againID, nil, http.StatusOK)
+	if report, _ := detail["report"].(string); !bytes.Contains([]byte(report), []byte("> **Draft**")) {
+		t.Fatalf("the kept draft should be the job report: %q", report)
+	}
+
+	t.Setenv("XPLAN_FAKE", "Sorry, I could not find anything.")
+	failed := env.expect("POST", base+"/reviews", map[string]string{"kind": "intent"}, http.StatusAccepted)
+	if job := waitForJob(t, env, base, failed["id"].(string)); job["status"] != "failed" {
+		t.Fatalf("an answer without sections should fail, got %v", job["status"])
+	}
+	if review := env.expect("POST", base+"/console", map[string]string{"input": "/review intent"}, http.StatusOK); review["ok"] != false {
+		t.Fatalf("/review must only accept review kinds: %v", review)
+	}
+}
+
+func hasFlag(card map[string]any, code string) bool {
+	flags, _ := card["health"].([]any)
+	for _, flag := range flags {
+		if entry, _ := flag.(map[string]any); entry["code"] == code {
+			return true
+		}
+	}
+	return false
+}
+
 func waitForJob(t *testing.T, env *testEnv, base, jobID string) map[string]any {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
@@ -340,8 +436,14 @@ func writeFile(t *testing.T, dir, name, content string) {
 
 func runIn(t *testing.T, dir string, name string, args ...string) {
 	t.Helper()
+	runInEnv(t, dir, nil, name, args...)
+}
+
+func runInEnv(t *testing.T, dir string, env []string, name string, args ...string) {
+	t.Helper()
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), env...)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%s %v: %v\n%s", name, args, err, output)
 	}

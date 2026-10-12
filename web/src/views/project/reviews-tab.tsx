@@ -5,6 +5,7 @@ import {
   FileSearchIcon,
   Loader2Icon,
   SendIcon,
+  TargetIcon,
   TriangleAlertIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,11 +19,11 @@ import {
   VerdictBadge,
 } from "@/components/status";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tip } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
-import { ago, dateTime, duration, jobActive } from "@/lib/format";
+import { ago, dateTime, duration, jobActive, jobTitle } from "@/lib/format";
 import { projectFileResolver } from "@/lib/links";
 import { invalidate, useQuery } from "@/lib/query";
 import { navigate, routeHref } from "@/lib/route";
@@ -31,6 +32,7 @@ import { refreshProject, useMeta } from "@/lib/ui-state";
 import { cn } from "@/lib/utils";
 
 const severityOrder: Severity[] = ["critical", "high", "medium", "low", "info"];
+const reportLabel: Record<string, string> = { ask: "Answer", intent: "Draft" };
 
 /** Read-only external reviews: run, watch, and read the findings. */
 export function ReviewsTab({
@@ -103,9 +105,7 @@ function RunBar({ slug }: { slug: string }) {
   const meta = useMeta();
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const kinds = (meta.data?.review_kinds ?? []).filter(
-    (kind) => kind.id !== "ask",
-  );
+  const kinds = (meta.data?.review_kinds ?? []).filter((kind) => kind.review);
 
   const start = async (kind: string, text = "") => {
     setBusy(kind);
@@ -265,7 +265,7 @@ function JobDetail({
         <header className="flex flex-wrap items-center gap-2">
           <KindIcon kind={job.kind} className="size-4 text-muted-foreground" />
           <h2 className="text-[15px] font-semibold capitalize">
-            {job.kind === "ask" ? "Question" : `${job.kind} review`}
+            {jobTitle(job.kind)}
           </h2>
           {job.status === "done" ? (
             <VerdictBadge verdict={job.verdict} kind={job.kind} />
@@ -285,6 +285,18 @@ function JobDetail({
               <CircleStopIcon />
               Cancel
             </Button>
+          )}
+          {!running && job.kind === "intent" && job.status === "done" && (
+            <a
+              href={routeHref({ view: "project", slug, tab: "intent" })}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "xs" }),
+                "ml-auto",
+              )}
+            >
+              <TargetIcon />
+              Open the Intent tab
+            </a>
           )}
         </header>
 
@@ -356,7 +368,7 @@ function JobDetail({
           >
             <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase select-none">
               <ChevronRightIcon className="size-3 transition-transform group-open:rotate-90" />
-              {job.kind === "ask" ? "Answer" : "Full report"}
+              {reportLabel[job.kind] ?? "Full report"}
             </summary>
             <div className="border-t p-4">
               <Markdown resolveHref={resolveHref}>

@@ -191,10 +191,12 @@ function usePaletteItems(close: () => void): PaletteItem[] {
         list.push({
           id: `review-${kind.id}`,
           group: "This project",
-          label: `Run ${kind.title}`,
+          label: kind.review
+            ? `Run ${kind.title}`
+            : "Draft intent from history",
           hint: "read-only",
           icon: kindIcon[kind.id],
-          keywords: "review",
+          keywords: kind.review ? "review" : "intent why draft",
           run: go(() => {
             api
               .startReview(current, kind.id)

@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -18,7 +19,7 @@ import (
 )
 
 // Version is overridden at build time via -ldflags.
-var Version = "0.1.0"
+var Version = "0.2.0"
 
 // App is the shared service.
 type App struct {
@@ -139,7 +140,7 @@ func (a *App) Facts(target *project.Project) (insight.Facts, error) {
 		if job.Active() {
 			activeJobs++
 		}
-		if job.Kind == "ask" {
+		if !review.IsReviewKind(job.Kind) {
 			continue
 		}
 		if lastAttempts[job.Kind] == nil {
@@ -154,6 +155,7 @@ func (a *App) Facts(target *project.Project) (insight.Facts, error) {
 		Snapshot:     snapshot,
 		State:        state,
 		IntentFilled: project.IntentFilled(intent),
+		IntentDraft:  project.IntentIsDraft(intent),
 		LastPark:     lastPark,
 		LatestDone:   latestDone,
 		LastAttempts: lastAttempts,
@@ -204,6 +206,62 @@ func (a *App) Brief(slug string) (*insight.Brief, error) {
 	}
 	brief := insight.BuildBrief(insight.BriefInput{Facts: facts, Intent: intent, ADRs: adrs, Reviews: jobs})
 	return &brief, nil
+}
+
+// DraftOutcome reports what DraftMissingIntents did for one project. Code is
+// queued, filled, new, running or error.
+type DraftOutcome struct {
+	Project string `json:"project"`
+	Code    string `json:"code"`
+	JobID   string `json:"job_id,omitempty"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+// DraftMissingIntents queues an intent draft for every project that existed
+// before it was registered and still has no intent. Projects started together
+// with their xplan entry are skipped on purpose: their owner writes the intent.
+func (a *App) DraftMissingIntents() (queued, skipped []DraftOutcome, err error) {
+	projectList, err := a.Store.List()
+	if err != nil {
+		return nil, nil, err
+	}
+	queued, skipped = []DraftOutcome{}, []DraftOutcome{}
+	for _, item := range projectList {
+		outcome := a.draftIntentIfMissing(item)
+		if outcome.Code == "queued" {
+			queued = append(queued, outcome)
+			continue
+		}
+		skipped = append(skipped, outcome)
+	}
+	return queued, skipped, nil
+}
+
+func (a *App) draftIntentIfMissing(target *project.Project) DraftOutcome {
+	outcome := DraftOutcome{Project: target.Slug}
+	facts, err := a.Facts(target)
+	if err != nil {
+		outcome.Code, outcome.Reason = "error", err.Error()
+		return outcome
+	}
+	if facts.IntentFilled {
+		outcome.Code, outcome.Reason = "filled", "intent already written"
+		return outcome
+	}
+	if !insight.Established(target, facts.Snapshot) {
+		outcome.Code, outcome.Reason = "new", "started together with its xplan entry: write this one yourself"
+		return outcome
+	}
+	job, err := a.Reviews.Enqueue(target.Slug, review.KindIntent, "", "bulk")
+	switch {
+	case errors.Is(err, review.ErrAlreadyActive):
+		outcome.Code, outcome.Reason, outcome.JobID = "running", "a draft is already running", job.ID
+	case err != nil:
+		outcome.Code, outcome.Reason = "error", err.Error()
+	default:
+		outcome.Code, outcome.JobID = "queued", job.ID
+	}
+	return outcome
 }
 
 // CurrentHead returns the project's HEAD from the latest snapshot.

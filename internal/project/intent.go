@@ -17,18 +17,34 @@ const (
 	headingGoal = "## Goal (north star)"
 )
 
+// IntentSections are the headings of intent.md, in order.
+var IntentSections = []string{
+	headingWhy,
+	headingGoal,
+	"## Success looks like",
+	"## Non-goals",
+	"## Constraints",
+	"## Original idea (verbatim)",
+}
+
+// DraftMarker starts the line an agent-written intent carries until the owner
+// has corrected it and deleted that line.
+const DraftMarker = "> **Draft**"
+
+// IntentTitle is the first line of intent.md.
+func IntentTitle(name string) string {
+	return "# Intent — " + name
+}
+
 // IntentTemplate builds the initial intent.md for a newly registered project.
 func IntentTemplate(name, readmeExcerpt string) string {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "# Intent — %s\n\n", name)
+	builder.WriteString(IntentTitle(name) + "\n\n")
 	builder.WriteString("> Why this project exists. Owned by xplan, not by the project.\n")
 	builder.WriteString("> Re-read this before touching the code again.\n\n")
-	builder.WriteString(headingWhy + "\n\n\n")
-	builder.WriteString(headingGoal + "\n\n\n")
-	builder.WriteString("## Success looks like\n\n\n")
-	builder.WriteString("## Non-goals\n\n\n")
-	builder.WriteString("## Constraints\n\n\n")
-	builder.WriteString("## Original idea (verbatim)\n\n\n")
+	for _, heading := range IntentSections {
+		builder.WriteString(heading + "\n\n\n")
+	}
 	if readmeExcerpt != "" {
 		builder.WriteString("---\n\n")
 		builder.WriteString("_Imported from the project's README at registration. Verify it, then rewrite the sections above in your own words._\n\n")
@@ -63,6 +79,16 @@ func (s *Store) WriteIntent(slug, content string) error {
 // section (anything outside comments and blank lines).
 func IntentFilled(content string) bool {
 	return sectionHasText(content, headingWhy) || sectionHasText(content, headingGoal)
+}
+
+// IntentIsDraft reports whether intent.md still carries the draft marker.
+func IntentIsDraft(content string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), DraftMarker) {
+			return true
+		}
+	}
+	return false
 }
 
 func sectionHasText(content, heading string) bool {

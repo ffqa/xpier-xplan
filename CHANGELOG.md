@@ -3,6 +3,30 @@
 All notable changes to xplan are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-10-11
+
+### Added
+
+- Intent drafts: an `intent` job lets the reviewer reconstruct why an existing
+  project was started from its README, docs and earliest commits. The draft
+  fills an empty `intent.md` with a `> **Draft**` line for the owner to correct;
+  a written intent is never overwritten (the draft stays in the job report and
+  the Intent tab offers "Load into editor").
+- "Draft missing intents" on the Overview and `POST /api/intent-drafts`: drafts
+  only for projects whose first commit predates their registration by more
+  than two days, so new projects stay owner-written.
+- `/draft-intent` console command, "Draft intent from history" in ⌘K, and draft
+  buttons in the Brief card and the Intent tab.
+- `intent_draft` health flag; drift reviews treat a draft intent as
+  low-confidence and say which findings depend on it.
+- `GET/PUT /api/projects/{slug}/intent` return `filled` and `draft`; git scans
+  record the first commit date and total commit count.
+
+### Changed
+
+- Only review kinds (drift, code, security, deploy, test) produce verdicts,
+  appear in the Review menu, count towards health and can be scheduled.
+
 ## [0.1.0] - 2026-10-11
 
 ### Added

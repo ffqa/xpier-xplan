@@ -69,8 +69,17 @@ export function verdictLabel(
     if (verdict === "attention") return "drifting";
     if (verdict === "critical") return "off-track";
   }
+  if (!verdict && kind === "intent") return "draft";
+  if (!verdict && kind === "ask") return "answered";
   if (!verdict) return "—";
   return verdict;
+}
+
+/** Heading for a job: "Question", "Intent draft" or "<kind> review". */
+export function jobTitle(kind: string): string {
+  if (kind === "ask") return "Question";
+  if (kind === "intent") return "Intent draft";
+  return `${kind} review`;
 }
 
 export const severityVariant: Record<

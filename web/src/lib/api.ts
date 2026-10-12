@@ -5,9 +5,11 @@ import type {
   Config,
   ConsoleResult,
   Doc,
+  DraftOutcome,
   Entry,
   HistoryItem,
   InboxItem,
+  Intent,
   Job,
   Meta,
   Project,
@@ -93,12 +95,14 @@ export const api = {
       `${p(slug)}/tree?path=${enc(path)}`,
     ),
 
-  intent: (slug: string) =>
-    request<{ content: string; filled: boolean }>("GET", `${p(slug)}/intent`),
+  intent: (slug: string) => request<Intent>("GET", `${p(slug)}/intent`),
   saveIntent: (slug: string, content: string) =>
-    request<{ content: string; filled: boolean }>("PUT", `${p(slug)}/intent`, {
-      content,
-    }),
+    request<Intent>("PUT", `${p(slug)}/intent`, { content }),
+  draftIntents: () =>
+    request<{ queued: DraftOutcome[]; skipped: DraftOutcome[] }>(
+      "POST",
+      "/api/intent-drafts",
+    ),
   adrs: (slug: string) => request<{ adrs: ADR[] }>("GET", `${p(slug)}/adrs`),
   createADR: (slug: string, title: string, context = "") =>
     request<ADR>("POST", `${p(slug)}/adrs`, { title, context }),

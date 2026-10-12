@@ -15,6 +15,8 @@ type Card struct {
 	HealthLevel       string            `json:"health_level"`
 	Health            []Flag            `json:"health"`
 	IntentFilled      bool              `json:"intent_filled"`
+	IntentDraft       bool              `json:"intent_draft"`
+	Established       bool              `json:"established"`
 	Branch            string            `json:"branch,omitempty"`
 	LastCommitAt      *time.Time        `json:"last_commit_at,omitempty"`
 	LastCommitSubject string            `json:"last_commit_subject,omitempty"`
@@ -40,6 +42,8 @@ func BuildCard(facts Facts) Card {
 		HealthLevel:  MaxLevel(flags),
 		Health:       flags,
 		IntentFilled: facts.IntentFilled,
+		IntentDraft:  facts.IntentDraft,
+		Established:  Established(facts.Project, facts.Snapshot),
 		Stack:        []string{},
 		LastPark:     facts.LastPark,
 		ActiveJobs:   facts.ActiveJobs,
@@ -139,7 +143,7 @@ func BuildBrief(input BriefInput) Brief {
 	brief.Since.Head = referenceHead
 
 	for _, job := range input.Reviews {
-		if job.Kind != "ask" && job.Status == review.StatusDone && job.CreatedAt.After(*referenceAt) {
+		if review.IsReviewKind(job.Kind) && job.Status == review.StatusDone && job.CreatedAt.After(*referenceAt) {
 			brief.Since.Reviews = append(brief.Since.Reviews, job)
 		}
 	}

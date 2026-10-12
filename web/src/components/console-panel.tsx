@@ -313,9 +313,13 @@ function JobResult({ slug, id }: { slug: string; id: string }) {
       </div>
     );
   }
+  const target =
+    job.kind === "intent"
+      ? routeHref({ view: "project", slug, tab: "intent" })
+      : routeHref({ view: "project", slug, tab: "reviews", arg: id });
   return (
     <a
-      href={routeHref({ view: "project", slug, tab: "reviews", arg: id })}
+      href={target}
       className="mt-1 ml-4 flex items-center gap-2 rounded-md border bg-card/60 px-3 py-1.5 font-sans hover:border-ring/50"
     >
       <KindIcon kind={job.kind} />

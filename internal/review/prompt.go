@@ -20,17 +20,19 @@ type PromptInput struct {
 	PreviousJob  *Job
 	Language     string
 	ProjectNotes string
+	FirstCommits []scanner.Commit
 }
 
 // Size caps keep the prompt well below argv limits and model context.
 const (
-	capIntent    = 6000
-	capADR       = 500
-	capADRTotal  = 3500
-	capChangelog = 1500
-	maxDocLines  = 80
-	maxCommits   = 20
-	maxSlices    = 15
+	capIntent       = 6000
+	capADR          = 500
+	capADRTotal     = 3500
+	capChangelog    = 1500
+	maxDocLines     = 80
+	maxCommits      = 20
+	maxSlices       = 15
+	maxFirstCommits = 15
 )
 
 // BuildPrompt renders the full prompt handed to the agent.
@@ -47,12 +49,17 @@ func BuildPrompt(input PromptInput) string {
 	writeADRs(&b, input.ADRs)
 	writePark(&b, input.LastPark)
 	writeSnapshot(&b, input.Snapshot)
+	writeFirstCommits(&b, input.FirstCommits)
 	writePrevious(&b, input.PreviousJob)
 
 	fmt.Fprintf(&b, "## Your task: %s\n\n%s\n\n", input.Kind.Title, input.Kind.Instructions)
-	if input.Kind.ID == "ask" {
+	switch input.Kind.ID {
+	case KindAsk:
 		fmt.Fprintf(&b, "Question from the owner:\n\n%s\n\n", strings.TrimSpace(input.Question))
 		fmt.Fprintf(&b, "## Output format\n\nAnswer in %s, in concise Markdown.\n", input.Language)
+		return b.String()
+	case KindIntent:
+		writeIntentFormat(&b, input.Language)
 		return b.String()
 	}
 
@@ -64,7 +71,28 @@ func BuildPrompt(input PromptInput) string {
 	return b.String()
 }
 
+// writeIntentFormat asks for the intent.md skeleton; ExtractIntentDraft relies
+// on the English headings.
+func writeIntentFormat(b *strings.Builder, language string) {
+	fmt.Fprintf(b, "## Output format\n\nOutput ONLY the document below, filled in, with the content in %s. Keep the headings exactly as written, in English. No preamble, no closing remarks, no code fence.\n\n", language)
+	last := len(project.IntentSections) - 1
+	for index, heading := range project.IntentSections {
+		b.WriteString(heading + "\n")
+		if index == last {
+			b.WriteString("(Quote the earliest description you can find, such as the first README text, early commit messages or an early spec, with its source in parentheses. Leave empty if nothing exists.)\n\n")
+			continue
+		}
+		b.WriteString("- …\n\n")
+	}
+	b.WriteString("## Sources\n- path or commit — what it told you\n")
+}
+
 func writeIntent(b *strings.Builder, intent string) {
+	if project.IntentIsDraft(intent) {
+		b.WriteString("### Intent (a DRAFT inferred by an agent and not yet confirmed by the owner; treat it as low-confidence)\n\n")
+		b.WriteString(truncate(strings.TrimSpace(intent), capIntent) + "\n\n")
+		return
+	}
 	b.WriteString("### Intent (written by the owner; the source of truth for why this project exists)\n\n")
 	if !project.IntentFilled(intent) {
 		b.WriteString("(The owner has not written the intent yet.)\n\n")
@@ -154,6 +182,17 @@ func writeSnapshot(b *strings.Builder, snapshot *scanner.Snapshot) {
 		}
 		b.WriteString("\n")
 	}
+}
+
+func writeFirstCommits(b *strings.Builder, commits []scanner.Commit) {
+	if len(commits) == 0 {
+		return
+	}
+	b.WriteString("### Earliest commits (oldest first)\n\n")
+	for _, commit := range commits {
+		fmt.Fprintf(b, "- %s %s %s\n", commit.Short, commit.At.Format("2006-01-02"), commit.Subject)
+	}
+	b.WriteString("\n")
 }
 
 func writePrevious(b *strings.Builder, previous *Job) {

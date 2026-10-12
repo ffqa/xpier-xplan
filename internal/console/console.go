@@ -51,6 +51,7 @@ var Commands = []Command{
 	{"/park", "<where you stopped> [| next step] [| open questions]", "Leave a park note before switching away"},
 	{"/note", "<text>", "Add a note to the journal"},
 	{"/adr", "<title>", "Create a decision record"},
+	{"/draft-intent", "", "Let the reviewer reconstruct the intent from history, for you to correct"},
 	{"/status", "<active|waiting|blocked|paused|done>", "Move the project on the board"},
 	{"/scan", "", "Rescan docs, git and progress now"},
 	{"/caught-up", "", "Mark everything as seen"},
@@ -100,6 +101,8 @@ func (c *Console) dispatch(target *project.Project, input string) Result {
 		return c.note(target, args)
 	case "/adr":
 		return c.adr(target, args)
+	case "/draft-intent":
+		return c.draftIntent(target)
 	case "/status":
 		return c.status(target, args)
 	case "/scan":
@@ -140,6 +143,10 @@ func (c *Console) review(target *project.Project, args string) Result {
 	lines := []string{}
 	jobIDs := []string{}
 	for _, kind := range kinds {
+		if !review.IsReviewKind(kind) {
+			lines = append(lines, fmt.Sprintf("%s: not a review kind (drift, code, security, deploy, test)", kind))
+			continue
+		}
 		job, err := c.App.Reviews.Enqueue(target.Slug, kind, "", "console")
 		switch {
 		case errors.Is(err, review.ErrAlreadyActive):
@@ -152,6 +159,22 @@ func (c *Console) review(target *project.Project, args string) Result {
 		}
 	}
 	return Result{OK: len(jobIDs) > 0, Output: strings.Join(lines, "\n"), JobIDs: jobIDs, Refresh: []string{"reviews", "brief"}}
+}
+
+func (c *Console) draftIntent(target *project.Project) Result {
+	job, err := c.App.Reviews.Enqueue(target.Slug, review.KindIntent, "", "console")
+	if errors.Is(err, review.ErrAlreadyActive) {
+		return Result{OK: false, Output: fmt.Sprintf("An intent draft is already running (%s).", job.ID), JobID: job.ID}
+	}
+	if err != nil {
+		return fail(err)
+	}
+	return Result{
+		OK:      true,
+		Output:  fmt.Sprintf("Drafting the intent with %s (read-only). An empty intent.md is filled in; a written one is kept and the draft waits in the Intent tab.", job.Reviewer),
+		JobID:   job.ID,
+		Refresh: []string{"reviews", "intent"},
+	}
 }
 
 func (c *Console) park(target *project.Project, args string) Result {

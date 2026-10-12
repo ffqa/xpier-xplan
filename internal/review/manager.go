@@ -75,7 +75,7 @@ func (m *Manager) Enqueue(slug, kindID, question, trigger string) (*Job, error) 
 	if !ok {
 		return nil, fmt.Errorf("%w: unknown review kind %q", project.ErrInvalid, kindID)
 	}
-	if kind.ID == "ask" && strings.TrimSpace(question) == "" {
+	if kind.ID == KindAsk && strings.TrimSpace(question) == "" {
 		return nil, fmt.Errorf("%w: a question is required", project.ErrInvalid)
 	}
 	reviewerName := m.ReviewerFor(target)
@@ -84,7 +84,7 @@ func (m *Manager) Enqueue(slug, kindID, question, trigger string) (*Job, error) 
 	}
 
 	m.mu.Lock()
-	if kind.ID != "ask" {
+	if kind.ID != KindAsk {
 		active, err := m.activeJob(slug, kind.ID)
 		if err != nil {
 			m.mu.Unlock()
@@ -167,14 +167,18 @@ func (m *Manager) run(ctx context.Context, target *project.Project, kind Kind, j
 		m.settings().ReviewDeadline())
 	treeChanged := isRepo && scanner.StatusFingerprint(target.Path) != fingerprintBefore
 
+	var draft draftOutcome
+	var draftErr error
+	if kind.ID == KindIntent && result.Err == nil {
+		draft, draftErr = m.applyIntentDraft(target, job, result.Output, filepath.Join(reviewsDir, job.ID+".md"))
+	}
+
 	m.finish(job, func(j *Job) {
 		j.PromptChars = len(prompt)
 		j.ExitCode = result.ExitCode
 		j.TreeChanged = treeChanged
 		report, _, parsed := ParseReport(result.Output)
-		if kind.ID == "ask" {
-			j.Verdict = ""
-		} else {
+		if kind.Review {
 			j.Verdict = report.Verdict
 			j.Score = report.Score
 			j.Summary = report.Summary
@@ -197,9 +201,14 @@ func (m *Manager) run(ctx context.Context, target *project.Project, kind Kind, j
 		case result.Err != nil:
 			j.Status = StatusFailed
 			j.Error = result.Err.Error()
+		case draftErr != nil:
+			j.Status = StatusFailed
+			j.Error = draftErr.Error()
 		default:
 			j.Status = StatusDone
-			if kind.ID != "ask" && !parsed {
+			j.Summary = nonEmpty(draft.summary, j.Summary)
+			j.IntentWritten = draft.written
+			if kind.Review && !parsed {
 				j.Error = "report has no parsable JSON block; verdict unknown"
 			}
 		}
@@ -225,24 +234,66 @@ func (m *Manager) buildPrompt(target *project.Project, kind Kind, job *Job) (str
 		return "", err
 	}
 	var previous *Job
-	if kind.ID != "ask" {
+	if kind.Review {
 		previous = m.LatestDone(target.Slug)[kind.ID]
+	}
+	var firstCommits []scanner.Commit
+	if kind.ID == KindIntent {
+		firstCommits = scanner.FirstCommits(target.Path, maxFirstCommits)
 	}
 	language := m.settings().ReportLanguage
 	if language == "" {
 		language = "English"
 	}
 	return BuildPrompt(PromptInput{
-		Project:     target,
-		Kind:        kind,
-		Question:    job.Question,
-		Intent:      intent,
-		ADRs:        adrs,
-		LastPark:    lastPark,
-		Snapshot:    snapshot,
-		PreviousJob: previous,
-		Language:    language,
+		Project:      target,
+		Kind:         kind,
+		Question:     job.Question,
+		Intent:       intent,
+		ADRs:         adrs,
+		LastPark:     lastPark,
+		Snapshot:     snapshot,
+		PreviousJob:  previous,
+		Language:     language,
+		FirstCommits: firstCommits,
 	}), nil
+}
+
+type draftOutcome struct {
+	summary string
+	written bool
+}
+
+// applyIntentDraft turns an intent job's answer into a clean draft (which
+// becomes the job's report) and writes it to intent.md only while the owner
+// has not written an intent: their own words are never overwritten.
+func (m *Manager) applyIntentDraft(target *project.Project, job *Job, output, reportPath string) (draftOutcome, error) {
+	draft, err := ExtractIntentDraft(output, target.Name, job.Reviewer, time.Now())
+	if err != nil {
+		return draftOutcome{}, err
+	}
+	if err := config.WriteFileAtomic(reportPath, []byte(draft)); err != nil {
+		return draftOutcome{}, err
+	}
+	current, err := m.store.ReadIntent(target.Slug)
+	if err != nil {
+		return draftOutcome{}, err
+	}
+	if project.IntentFilled(current) {
+		return draftOutcome{summary: "Draft ready. Your intent was kept as it is; load the draft in the Intent tab to compare."}, nil
+	}
+	if err := m.store.WriteIntent(target.Slug, draft); err != nil {
+		return draftOutcome{}, err
+	}
+	m.logger.Printf("intent draft written project=%s id=%s", target.Slug, job.ID)
+	return draftOutcome{summary: "Draft written to intent.md. Correct it in your own words, then delete the Draft line.", written: true}, nil
+}
+
+func nonEmpty(value, fallback string) string {
+	if strings.TrimSpace(value) != "" {
+		return value
+	}
+	return fallback
 }
 
 // Cancel stops a queued or running job.
@@ -340,7 +391,7 @@ func (m *Manager) LatestDone(slug string) map[string]*Job {
 		return latest
 	}
 	for _, job := range jobs {
-		if job.Status == StatusDone && job.Kind != "ask" && latest[job.Kind] == nil {
+		if job.Status == StatusDone && IsReviewKind(job.Kind) && latest[job.Kind] == nil {
 			latest[job.Kind] = job
 		}
 	}

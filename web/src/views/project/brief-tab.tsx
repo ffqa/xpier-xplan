@@ -11,6 +11,7 @@ import {
   SquareParkingIcon,
   TargetIcon,
   UsersIcon,
+  WandSparklesIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,6 +24,7 @@ import { Progress } from "@/components/ui/misc";
 import { api } from "@/lib/api";
 import { ago, dateTime, duration, percent } from "@/lib/format";
 import { BRIEF_SECTIONS, sectionBody } from "@/lib/intent";
+import { useIntentDraft } from "@/lib/intent-draft";
 import { invalidate } from "@/lib/query";
 import { navigate, routeHref } from "@/lib/route";
 import type { Brief } from "@/lib/types";
@@ -77,22 +79,39 @@ function IntentCard({ slug, brief }: { slug: string; brief: Brief }) {
       >
         <p className="text-[13px]">The intent is still empty.</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Write down why this project exists and what “done” means, in your own
-          words. Drift reviews compare the code against it, and it is the first
-          thing you will read when you come back.
+          {brief.card.established
+            ? "This project already has history. Let the reviewer reconstruct why it was started, then correct the draft in your own words."
+            : "Write down why this project exists and what “done” means, in your own words. Drift reviews compare the code against it, and it is the first thing you will read when you come back."}
         </p>
-        <Button
-          size="sm"
-          className="mt-3"
-          onClick={() => navigate({ view: "project", slug, tab: "intent" })}
-        >
-          Write the intent
-        </Button>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {brief.card.established && <DraftIntentButton slug={slug} primary />}
+          <Button
+            size="sm"
+            variant={brief.card.established ? "outline" : "default"}
+            onClick={() => navigate({ view: "project", slug, tab: "intent" })}
+          >
+            Write it myself
+          </Button>
+        </div>
       </Section>
     );
   }
   return (
-    <Section title="Why this exists" icon={<TargetIcon />} actions={edit}>
+    <Section
+      title={
+        <>
+          Why this exists
+          {brief.card.intent_draft && (
+            <Badge variant="warn" className="ml-2 normal-case">
+              draft — needs your edit
+            </Badge>
+          )}
+        </>
+      }
+      icon={<TargetIcon />}
+      actions={edit}
+      className={brief.card.intent_draft ? "border-warn/40" : undefined}
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         {sections.map((section) => (
           <div key={section.prefix} className="min-w-0">
@@ -104,6 +123,39 @@ function IntentCard({ slug, brief }: { slug: string; brief: Brief }) {
         ))}
       </div>
     </Section>
+  );
+}
+
+function DraftIntentButton({
+  slug,
+  primary,
+}: {
+  slug: string;
+  primary?: boolean;
+}) {
+  const draft = useIntentDraft(slug);
+  if (draft.running && draft.job) {
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-info">
+        <Loader2Icon className="size-3.5 animate-spin" />
+        {draft.job.reviewer} is drafting the intent…
+      </span>
+    );
+  }
+  return (
+    <Button
+      size="sm"
+      variant={primary ? "default" : "outline"}
+      disabled={draft.starting}
+      onClick={() => void draft.start()}
+    >
+      {draft.starting ? (
+        <Loader2Icon className="animate-spin" />
+      ) : (
+        <WandSparklesIcon />
+      )}
+      Draft from history
+    </Button>
   );
 }
 
@@ -392,9 +444,7 @@ function SinceGroup({
 
 function ReviewsCard({ slug, brief }: { slug: string; brief: Brief }) {
   const meta = useMeta();
-  const kinds = (meta.data?.review_kinds ?? []).filter(
-    (kind) => kind.id !== "ask",
-  );
+  const kinds = (meta.data?.review_kinds ?? []).filter((kind) => kind.review);
   const activeKinds = new Set(brief.active_reviews.map((job) => job.kind));
 
   const run = async (kind: string) => {

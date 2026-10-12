@@ -23,15 +23,17 @@ type Commit struct {
 
 // GitInfo summarizes repository activity.
 type GitInfo struct {
-	Branch       string     `json:"branch"`
-	Head         string     `json:"head"`
-	LastCommitAt *time.Time `json:"last_commit_at,omitempty"`
-	DirtyFiles   int        `json:"dirty_files"`
-	DirtySample  []string   `json:"dirty_sample"`
-	Commits7d    int        `json:"commits_7d"`
-	Commits30d   int        `json:"commits_30d"`
-	Remote       string     `json:"remote,omitempty"`
-	Recent       []Commit   `json:"recent"`
+	Branch        string     `json:"branch"`
+	Head          string     `json:"head"`
+	FirstCommitAt *time.Time `json:"first_commit_at,omitempty"`
+	LastCommitAt  *time.Time `json:"last_commit_at,omitempty"`
+	DirtyFiles    int        `json:"dirty_files"`
+	DirtySample   []string   `json:"dirty_sample"`
+	Commits7d     int        `json:"commits_7d"`
+	Commits30d    int        `json:"commits_30d"`
+	TotalCommits  int        `json:"total_commits"`
+	Remote        string     `json:"remote,omitempty"`
+	Recent        []Commit   `json:"recent"`
 }
 
 const gitTimeout = 15 * time.Second
@@ -86,8 +88,47 @@ func ReadGit(dir string) (*GitInfo, error) {
 	}
 	info.Commits7d = countSince(dir, "7.days")
 	info.Commits30d = countSince(dir, "30.days")
+	info.TotalCommits = countCommits(dir)
+	info.FirstCommitAt = firstCommitAt(dir)
 	info.DirtyFiles, info.DirtySample = dirtyFiles(dir)
 	return info, nil
+}
+
+// firstCommitAt returns the committer time of the oldest root commit.
+func firstCommitAt(dir string) *time.Time {
+	roots, err := runGit(dir, "rev-list", "--max-parents=0", "HEAD")
+	if err != nil || roots == "" {
+		return nil
+	}
+	out, err := runGit(dir, append([]string{"log", "--no-walk", "--format=%ct"}, strings.Fields(roots)...)...)
+	if err != nil {
+		return nil
+	}
+	var oldest *time.Time
+	for _, line := range strings.Fields(out) {
+		unix, err := strconv.ParseInt(line, 10, 64)
+		if err != nil {
+			continue
+		}
+		at := time.Unix(unix, 0).UTC()
+		if oldest == nil || at.Before(*oldest) {
+			oldest = &at
+		}
+	}
+	return oldest
+}
+
+// FirstCommits returns the oldest commits, oldest first (empty for non-repos).
+func FirstCommits(dir string, limit int) []Commit {
+	out, err := runGit(dir, "log", "--reverse", logFormat)
+	if err != nil {
+		return []Commit{}
+	}
+	lines := strings.SplitN(out, "\n", limit+1)
+	if len(lines) > limit {
+		lines = lines[:limit]
+	}
+	return parseLog(strings.Join(lines, "\n"))
 }
 
 const logFormat = "--pretty=format:%H%x1f%ct%x1f%an%x1f%s"
@@ -157,6 +198,15 @@ func StatusFingerprint(dir string) string {
 func isAncestor(dir, commit string) bool {
 	_, err := runGit(dir, "merge-base", "--is-ancestor", commit, "HEAD")
 	return err == nil
+}
+
+func countCommits(dir string) int {
+	out, err := runGit(dir, "rev-list", "--count", "HEAD")
+	if err != nil {
+		return 0
+	}
+	count, _ := strconv.Atoi(strings.TrimSpace(out))
+	return count
 }
 
 func countSince(dir, since string) int {
