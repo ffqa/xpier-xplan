@@ -1,16 +1,9 @@
 import { useEffect, useState } from "react";
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CircleDashedIcon,
-  Loader2Icon,
-  PlugZapIcon,
-} from "lucide-react";
+import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { ErrorBlock, LoadingBlock, Section } from "@/components/common";
 import { KindIcon } from "@/components/status";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,18 +14,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api } from "@/lib/api";
-import { kindLabel, timeAgo } from "@/lib/format";
+import { kindLabel } from "@/lib/format";
 import { LANGUAGES, t, useLanguage } from "@/lib/i18n";
 import { switchLanguage } from "@/lib/language";
 import { invalidate, useQuery } from "@/lib/query";
-import {
-  AUTO_REVIEWER,
-  healthVariant,
-  orderReviewers,
-  reviewerLabel,
-} from "@/lib/reviewers";
+import { AUTO_REVIEWER, orderReviewers, reviewerLabel } from "@/lib/reviewers";
 import type { Config, ReviewerInfo } from "@/lib/types";
 import { useMeta, useUI } from "@/lib/ui-state";
+import { ReviewerAgents } from "@/views/reviewer-agents";
 
 /** Report languages offered as one-click presets; any other text works too. */
 const REPORT_LANGUAGES = ["English", "Simplified Chinese"];
@@ -62,7 +51,8 @@ function SettingsForm({ initial }: { initial: Config }) {
     try {
       await api.patchConfig({
         default_reviewer: draft.default_reviewer,
-        reviewer_order: draft.reviewer_order,
+        // Reviewers added or deleted since the page loaded are reflected here.
+        reviewer_order: reviewers.map((reviewer) => reviewer.name),
         report_language: draft.report_language,
         scan_interval: draft.scan_interval,
         review_timeout: draft.review_timeout,
@@ -194,6 +184,7 @@ function SettingsForm({ initial }: { initial: Config }) {
 
         <ReviewerAgents
           reviewers={reviewers}
+          globalTimeout={initial.review_timeout}
           onReorder={(names) => set("reviewer_order", names)}
         />
 
@@ -332,192 +323,6 @@ export function ReviewerSelect({
         ))}
       </SelectContent>
     </Select>
-  );
-}
-
-/** Reviewer presets in "auto" order, with health and a connection test. */
-function ReviewerAgents({
-  reviewers,
-  onReorder,
-}: {
-  reviewers: ReviewerInfo[];
-  onReorder: (names: string[]) => void;
-}) {
-  const [testing, setTesting] = useState<ReadonlySet<string>>(new Set());
-  const mark = (names: string[], busy: boolean) =>
-    setTesting((current) => {
-      const next = new Set(current);
-      names.forEach((name) => (busy ? next.add(name) : next.delete(name)));
-      return next;
-    });
-
-  const testOne = async (name: string) => {
-    mark([name], true);
-    try {
-      const result = await api.testReviewer(name);
-      if (result.health.status === "ok") {
-        toast.success(t("{name} is working", { name }));
-      } else {
-        toast.warning(`${name}: ${result.health_label}`, {
-          description: result.health.detail,
-        });
-      }
-      invalidate("meta");
-    } catch (error) {
-      toast.error((error as Error).message);
-    } finally {
-      mark([name], false);
-    }
-  };
-
-  const testAll = async () => {
-    const names = reviewers.filter((r) => r.installed).map((r) => r.name);
-    mark(names, true);
-    try {
-      const { results } = await api.testReviewers();
-      const working = Object.values(results).filter(
-        (health) => health.status === "ok",
-      ).length;
-      toast.success(
-        t("{working} of {total} installed reviewers are working", {
-          working,
-          total: names.length,
-        }),
-      );
-      invalidate("meta");
-    } catch (error) {
-      toast.error((error as Error).message);
-    } finally {
-      mark(names, false);
-    }
-  };
-
-  const move = (index: number, delta: number) => {
-    const names = reviewers.map((reviewer) => reviewer.name);
-    const target = index + delta;
-    if (target < 0 || target >= names.length) return;
-    [names[index], names[target]] = [names[target], names[index]];
-    onReorder(names);
-  };
-
-  return (
-    <Section
-      title={t("Reviewer agents")}
-      bodyClassName="p-0"
-      actions={
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={testing.size > 0}
-          onClick={() => void testAll()}
-        >
-          {testing.size > 0 ? (
-            <Loader2Icon className="animate-spin" />
-          ) : (
-            <PlugZapIcon />
-          )}
-          {t("Test all")}
-        </Button>
-      }
-    >
-      <ol className="divide-y text-[12.5px]">
-        {reviewers.map((reviewer, index) => (
-          <li key={reviewer.name} className="flex gap-3 px-3 py-2">
-            <span className="w-4 pt-1 text-right text-muted-foreground tabular-nums">
-              {index + 1}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{reviewer.name}</span>
-                <HealthBadge reviewer={reviewer} />
-                <div className="ml-auto flex items-center gap-0.5">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={!reviewer.installed || testing.has(reviewer.name)}
-                    onClick={() => void testOne(reviewer.name)}
-                    title={t("Ask it to reply with a fixed word (read-only)")}
-                  >
-                    {testing.has(reviewer.name) && (
-                      <Loader2Icon className="animate-spin" />
-                    )}
-                    {t("Test")}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={index === 0}
-                    onClick={() => move(index, -1)}
-                    aria-label={t("Try earlier")}
-                  >
-                    <ArrowUpIcon />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={index === reviewers.length - 1}
-                    onClick={() => move(index, 1)}
-                    aria-label={t("Try later")}
-                  >
-                    <ArrowDownIcon />
-                  </Button>
-                </div>
-              </div>
-              <p className="text-muted-foreground">{reviewer.description}</p>
-              <code className="mt-1 block font-mono text-[11px] break-all text-muted-foreground/80">
-                {reviewer.command.join(" ")}
-              </code>
-              <HealthLine reviewer={reviewer} />
-            </div>
-          </li>
-        ))}
-      </ol>
-      <p className="border-t px-3 py-2 text-xs text-muted-foreground">
-        {t(
-          '"auto" tries these top to bottom and skips any that is missing or not logged in. Reorder with the arrows, then Save. Add or change agents in config.yaml; every preset runs the agent read-only.',
-        )}
-      </p>
-    </Section>
-  );
-}
-
-function HealthBadge({ reviewer }: { reviewer: ReviewerInfo }) {
-  if (!reviewer.installed) {
-    return <Badge variant="muted">{t("not installed")}</Badge>;
-  }
-  if (!reviewer.health) {
-    return (
-      <Badge variant="outline">
-        <CircleDashedIcon />
-        {t("not tested")}
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant={healthVariant[reviewer.health.status]}>
-      {reviewer.health_label}
-    </Badge>
-  );
-}
-
-/** When and how the last check went, with the agent's own error line. */
-function HealthLine({ reviewer }: { reviewer: ReviewerInfo }) {
-  const health = reviewer.health;
-  if (!reviewer.installed || !health) return null;
-  const source =
-    health.source === "run" ? t("during a review") : t("connection test");
-  return (
-    <p className="mt-1 text-[11px] text-muted-foreground">
-      {t("Checked {time} ({source})", {
-        time: timeAgo(health.checked_at),
-        source,
-      })}
-      {health.detail && (
-        <span className="block break-words text-muted-foreground/80">
-          {health.detail}
-        </span>
-      )}
-    </p>
   );
 }
 

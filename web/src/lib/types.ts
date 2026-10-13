@@ -219,13 +219,37 @@ export interface ReviewerHealth {
   source: "test" | "run";
 }
 
-export interface ReviewerInfo {
-  name: string;
+/** What is stored for one reviewer; {model} and {agent} fill the matching slots. */
+export interface ReviewerDef {
   description: string;
   command: string[];
+  model: string;
+  agent: string;
+  /** Overrides the global review timeout, e.g. "40m". */
+  timeout: string;
+}
+
+export interface ReviewerInfo extends ReviewerDef {
+  name: string;
+  /** The reviewer's own timeout or the global one, e.g. "20m". */
+  effective_timeout: string;
+  supports_model: boolean;
+  supports_agent: boolean;
+  /** Shipped with xplan (can be reset, not deleted). */
+  builtin: boolean;
+  /** A built-in preset the user changed. */
+  modified: boolean;
   installed: boolean;
   health?: ReviewerHealth;
   health_label?: string;
+}
+
+/** A third-party CLI offered as a starting point by "Add reviewer". */
+export interface ReviewerTemplate {
+  name: string;
+  description: string;
+  command: string[];
+  note?: string;
 }
 
 export interface ConsoleCommand {
@@ -244,6 +268,7 @@ export interface Meta {
   doc_kinds: string[];
   /** Presets in the order "auto" tries them. */
   reviewers: ReviewerInfo[];
+  reviewer_templates: ReviewerTemplate[];
   default_reviewer: string;
   reviewer_order: string[];
   /** What "auto" would use now; verified when it passed a recent check. */
@@ -263,7 +288,7 @@ export interface Config {
   language: string;
   report_language: string;
   default_schedule: Record<string, string>;
-  reviewers: Record<string, { description: string; command: string[] }>;
+  reviewers: Record<string, ReviewerDef>;
 }
 
 export interface ConsoleResult {

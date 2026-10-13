@@ -2,6 +2,53 @@
 
 Recurring problems and how they were resolved. Newest first.
 
+## 2026-10-13
+
+### "timed out after 20m0s / Working..." on omp
+
+- **Symptom**: drift reviews on omp failed after exactly 20 minutes; the only
+  output was "Working...".
+- **Cause**: omp's log showed its free model answering
+  `429 Endpoint is unavailable`, and omp retried quietly until xplan killed it.
+  A replay with a healthy model still needed about 21 minutes on that project.
+- **Fix (v0.4.0)**: per-reviewer model and timeout, omp starts without skills,
+  extensions, rules and LSP, and the timeout error now explains the likely
+  causes and shows the agent's last lines.
+- **Lesson**: a timeout is a symptom; read the agent's own log for 429 / 5xx
+  retries before raising the limit.
+
+### Logged-out agents that exit with code 0
+
+- **Symptom**: `codebuddy` and `qodercli` "succeeded" with an empty or
+  one-line answer.
+- **Cause**: both print a short login hint (or nothing) and exit 0 when not
+  logged in.
+- **Fix**: empty output, or a short output that matches the login pattern,
+  now counts as a failure, so `auto` moves on.
+
+### Build in the same batch as its edit (third time)
+
+- **Symptom**: `undefined: fillFromPreset` right after adding the function.
+- **Cause**: the edit and `go build` were sent together again.
+- **Fix**: same rule as 2026-10-12. Edits first; build and test only after
+  every edit result is back.
+
+### Background server died with the shell
+
+- **Symptom**: `nohup ./xplan serve &` stopped answering after the command
+  finished.
+- **Fix**: start it as its own background shell with
+  `exec ./xplan serve --no-schedule`, and stop it by port
+  (`lsof -nP -t -iTCP:7788 -sTCP:LISTEN`).
+
+### Markdown table rows not found after an edit (seen again)
+
+- **Symptom**: edits to two rows of the settings table in `Fetures.md` failed
+  with "string not found".
+- **Cause**: the first edit in the batch widened a column; the formatter
+  re-padded the whole table before the next edit ran.
+- **Fix**: edit one table at a time and re-read it before the next row.
+
 ## 2026-10-12
 
 ### Headless `claude -p` hangs: cause found

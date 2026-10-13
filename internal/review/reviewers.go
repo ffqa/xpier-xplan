@@ -56,6 +56,13 @@ func (m *Manager) ReviewerHealth() map[string]ReviewerHealth {
 	return m.health.All()
 }
 
+// ForgetReviewerHealth drops a reviewer's recorded result.
+func (m *Manager) ForgetReviewerHealth(name string) {
+	if err := m.health.Forget(name); err != nil {
+		m.logger.Printf("reviewer health save failed name=%s: %v", name, err)
+	}
+}
+
 // AutoChoice tells which reviewer "auto" would use right now without running
 // anything: the first installed candidate with a fresh success (verified), or
 // else the first installed candidate that still has to pass a test.
@@ -179,7 +186,7 @@ func (m *Manager) runWithReviewer(ctx context.Context, job *Job, vars ArgvVars, 
 		if err != nil {
 			return runResult{}, err
 		}
-		result := runAgent(ctx, argv, vars.Path, outputPath, logPath, m.settings().ReviewDeadline())
+		result := runAgent(ctx, argv, vars.Path, outputPath, logPath, m.settings().ReviewDeadlineFor(name))
 		status := m.recordRun(ctx, name, result, logPath)
 		if auto && ctx.Err() == nil && (status == HealthAuth || status == HealthMissing) {
 			m.noteAttempt(job, name, HealthLabel(status))

@@ -17,8 +17,11 @@ asks a **read-only** agent to review the project from the outside.
   yourself; for one that existed before xplan, the reviewer reconstructs it from
   the README and git history and you correct it. A written intent is never overwritten.
 - **Any agent you have**: cursor-agent, codex, claude, kimi, gemini, qwen,
-  opencode, kiro or omp. The default `auto` reviewer uses the first one that is
-  installed and logged in, and Settings can test each one.
+  opencode, kiro, devin or omp built in, templates for codebuddy, qodercli and
+  Claude Code on other providers, or any CLI agent you add yourself. Each
+  reviewer can have its own model, agent and timeout. The default `auto`
+  reviewer uses the first one that is installed and logged in, and Settings can
+  test each one.
 - **English or 简体中文**: one click in the status bar switches the UI and the
   server messages; reports can be written in Chinese too.
 - **Read-only by design**: xplan never writes into a project, agents run in their
@@ -41,15 +44,18 @@ Open `http://localhost:7788` (some embedded browsers render an empty page for
 
 ## Requirements
 
-| Tool         | Version       | Why                                                                                                   |
-| ------------ | ------------- | ----------------------------------------------------------------------------------------------------- |
-| Go           | 1.24+         | Backend, uses the 1.22+ `net/http` router                                                             |
-| Node         | 24 (`.nvmrc`) | Building the UI                                                                                       |
-| An agent CLI | any one       | Reviews: `cursor-agent`, `codex`, `claude`, `kimi`, `gemini`, `qwen`, `opencode`, `kiro-cli` or `omp` |
+| Tool         | Version       | Why                                                                                                                          |
+| ------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Go           | 1.24+         | Backend, uses the 1.22+ `net/http` router                                                                                    |
+| Node         | 24 (`.nvmrc`) | Building the UI                                                                                                              |
+| An agent CLI | any one       | Reviews: `cursor-agent`, `codex`, `claude`, `kimi`, `gemini`, `qwen`, `opencode`, `kiro-cli`, `devin`, `omp`, or one you add |
 
 The agent CLI must already be logged in (for example `cursor-agent login`,
 `codex login`, `opencode auth login`). Settings → Reviewer agents → Test all
 shows which ones work on this machine; `auto` skips the rest.
+
+If a reviewer times out, open Settings → Reviewer agents → Edit and pick a
+faster model or give that reviewer a longer timeout (for example `40m`).
 
 ## Commands
 

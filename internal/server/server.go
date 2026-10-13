@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ffqa/xpier-xplan/internal/app"
+	"github.com/ffqa/xpier-xplan/internal/config"
 	"github.com/ffqa/xpier-xplan/internal/console"
 	"github.com/ffqa/xpier-xplan/internal/project"
 	"github.com/ffqa/xpier-xplan/internal/review"
@@ -52,6 +53,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/intent-drafts", s.handleDraftIntents)
 	mux.HandleFunc("POST /api/reviewers/test", s.handleTestReviewers)
 	mux.HandleFunc("POST /api/reviewers/{name}/test", s.handleTestReviewer)
+	mux.HandleFunc("PUT /api/reviewers/{name}", s.handlePutReviewer)
+	mux.HandleFunc("DELETE /api/reviewers/{name}", s.handleDeleteReviewer)
 	mux.HandleFunc("POST /api/projects", s.handleAddProject)
 
 	mux.HandleFunc("GET /api/projects/{slug}", s.handleGetProject)
@@ -197,9 +200,9 @@ func (s *Server) writeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, project.ErrNotFound), errors.Is(err, review.ErrJobNotFound), errors.Is(err, os.ErrNotExist):
 		status = http.StatusNotFound
-	case errors.Is(err, project.ErrInvalid):
+	case errors.Is(err, project.ErrInvalid), errors.Is(err, config.ErrReviewer):
 		status = http.StatusBadRequest
-	case errors.Is(err, review.ErrAlreadyActive):
+	case errors.Is(err, review.ErrAlreadyActive), errors.Is(err, app.ErrReviewerInUse):
 		status = http.StatusConflict
 	case errors.Is(err, scanner.ErrOutsideRoot), errors.Is(err, scanner.ErrSensitive):
 		status = http.StatusForbidden

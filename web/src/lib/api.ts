@@ -13,6 +13,7 @@ import type {
   Job,
   Meta,
   Project,
+  ReviewerDef,
   ReviewerHealth,
   ReviewerInfo,
   TreeEntry,
@@ -70,6 +71,19 @@ export const api = {
       results: Record<string, ReviewerHealth>;
       reviewers: ReviewerInfo[];
     }>("POST", "/api/reviewers/test"),
+  /** Adds a custom reviewer or changes an existing one. */
+  saveReviewer: (name: string, def: ReviewerDef) =>
+    request<{ reviewer: ReviewerInfo; reviewers: ReviewerInfo[] }>(
+      "PUT",
+      `/api/reviewers/${enc(name)}`,
+      def,
+    ),
+  /** Deletes a custom reviewer, or resets a built-in one. */
+  removeReviewer: (name: string) =>
+    request<{ reviewers: ReviewerInfo[] }>(
+      "DELETE",
+      `/api/reviewers/${enc(name)}`,
+    ),
   overview: () =>
     request<{ cards: Card[]; active_reviews: Job[] }>("GET", "/api/overview"),
   inbox: (min: string) =>

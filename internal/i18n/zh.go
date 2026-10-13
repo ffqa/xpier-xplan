@@ -99,4 +99,43 @@ var zh = map[string]string{
 	"Delivered to xteam pm.":                                          "已送达 xteam pm。",
 	"Opened in Cursor.":                                               "已在 Cursor 中打开。",
 	"Opened in Finder.":                                               "已在访达中打开。",
+
+	// Reviewer runs
+	"timed out after %s":              "%s 后超时",
+	"the agent asked for a login: %s": "评审工具要求先登录：%s",
+	"Last lines from the agent:":      "评审工具最后的输出：",
+	"The agent exited without printing anything. It may not be logged in: run it once in a terminal.":                                                                                                                                              "评审工具没有任何输出就退出了，可能还没登录：请先在终端里运行一次。",
+	"No answer within %s. The agent's model service may be down or rate-limited (many agents retry quietly), or the project needs more time. Try another model or reviewer, or give this reviewer a longer timeout in Settings → Reviewer agents.": "%s 内没有得到回答。可能是模型服务故障或被限流（很多评审工具会在后台悄悄重试），也可能是项目太大需要更久。请换一个模型或评审工具，或在「设置 → 评审工具」里给它更长的超时时间。",
+
+	// Reviewer validation
+	"Reviewer names use 1-40 lowercase letters, digits, dots, dashes or underscores, and cannot be %q.": "评审工具名称只能用 1-40 个小写字母、数字、点、横线或下划线，并且不能是 %q。",
+	"The command needs at least the program to run.":                                                    "命令至少要有要运行的程序。",
+	"The program (first line of the command) cannot be a placeholder.":                                  "程序（命令的第一行）不能是占位符。",
+	"The command must pass the review prompt with %s or %s.":                                            "命令必须用 %s 或 %s 传入评审提示。",
+	"Command arguments cannot contain line breaks.":                                                     "命令参数里不能有换行。",
+	"The timeout must look like 30m or 1h, between 1m and 24h.":                                         "超时要写成 30m 或 1h 这样，范围 1m 到 24h。",
+	"The description is longer than 300 characters.":                                                    "说明超过了 300 个字符。",
+	"The %s is longer than 200 characters.":                                                             "%s 超过了 200 个字符。",
+	"The %s cannot start with \"-\".":                                                                   "%s 不能以“-”开头。",
+	"The %s cannot contain spaces, braces or line breaks.":                                              "%s 里不能有空格、花括号或换行。",
+
+	// Built-in reviewer presets
+	"Cursor Agent in ask mode (read-only Q&A)":                                                          "Cursor Agent 的 ask 模式（只读问答）",
+	"Claude Code print mode limited to Read/Grep/Glob, without MCP servers":                             "Claude Code 打印模式，只允许 Read/Grep/Glob，不加载 MCP 服务",
+	"Codex exec in read-only sandbox":                                                                   "Codex exec，只读沙箱",
+	"omp print mode with read-only tools; skills, extensions, rules and LSP stay off so it starts fast": "omp 打印模式，只读工具；关闭技能、扩展、规则和 LSP，启动更快",
+	"Kimi Code prompt mode with a Read/Grep/Glob-only agent profile":                                    "Kimi Code 提示模式，配合只有 Read/Grep/Glob 的 agent 配置",
+	"Gemini CLI headless mode; approval-required tools are denied":                                      "Gemini CLI 无界面模式；需要批准的工具一律拒绝",
+	"Qwen Code headless mode; approval-required tools are denied":                                       "Qwen Code 无界面模式；需要批准的工具一律拒绝",
+	"OpenCode run with the read-only plan agent":                                                        "OpenCode run，使用只读的 plan agent",
+	"Kiro CLI non-interactive chat trusting only fs_read":                                               "Kiro CLI 非交互对话，只信任 fs_read",
+	"Devin CLI print mode; tools that need approval are rejected":                                       "Devin CLI 打印模式；需要批准的工具一律拒绝",
+
+	// Third-party reviewer templates
+	"Tencent CodeBuddy Code print mode limited to Read/Grep/Glob":                                    "腾讯 CodeBuddy Code 打印模式，只允许 Read/Grep/Glob",
+	"Log in once by running codebuddy in a terminal.":                                                "先在终端里运行一次 codebuddy 完成登录。",
+	"Qoder CLI print mode with edit and shell tools disallowed":                                      "Qoder CLI 打印模式，禁用编辑和命令行工具",
+	"Log in once by running qodercli and typing /login.":                                             "先在终端里运行 qodercli 并输入 /login 完成登录。",
+	"Claude Code read-only against an Anthropic-compatible provider (GLM, Kimi, DeepSeek, a relay…)": "Claude Code 只读模式，连接兼容 Anthropic 接口的第三方服务（GLM、Kimi、DeepSeek、中转站…）",
+	`Create the settings file first, e.g. {"env": {"ANTHROPIC_BASE_URL": "https://…", "ANTHROPIC_AUTH_TOKEN": "…"}}. The key stays in that file, not in config.yaml.`: `请先创建这个设置文件，例如 {"env": {"ANTHROPIC_BASE_URL": "https://…", "ANTHROPIC_AUTH_TOKEN": "…"}}。密钥只放在这个文件里，不会写进 config.yaml。`,
 }

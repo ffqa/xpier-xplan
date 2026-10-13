@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ffqa/xpier-xplan/internal/config"
 	"github.com/ffqa/xpier-xplan/internal/console"
 	"github.com/ffqa/xpier-xplan/internal/i18n"
 	"github.com/ffqa/xpier-xplan/internal/review"
@@ -26,8 +27,8 @@ func TestChineseCatalogCoversSource(t *testing.T) {
 	}
 }
 
-// TestChineseCatalogCoversTables checks the strings localized indirectly,
-// through review.LocalizedKinds and console.LocalizedCommands.
+// TestChineseCatalogCoversTables checks the strings localized indirectly:
+// review kinds, console commands, reviewer presets and templates.
 func TestChineseCatalogCoversTables(t *testing.T) {
 	catalog := i18n.Catalogs["zh"]
 	expect := func(key string) {
@@ -41,6 +42,13 @@ func TestChineseCatalogCoversTables(t *testing.T) {
 	}
 	for _, command := range console.Commands {
 		expect(command.Summary)
+	}
+	for _, preset := range config.BuiltinReviewers() {
+		expect(preset.Description)
+	}
+	for _, template := range config.ReviewerTemplates {
+		expect(template.Description)
+		expect(template.Note)
 	}
 }
 

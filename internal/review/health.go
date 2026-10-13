@@ -73,6 +73,10 @@ func LoadHealthBook(home string) (*HealthBook, error) {
 		book.entries = map[string]ReviewerHealth{}
 		return book, fmt.Errorf("parse %s: %w", book.path, err)
 	}
+	for name, health := range book.entries {
+		health.Detail = ansiEscape.ReplaceAllString(health.Detail, "")
+		book.entries[name] = health
+	}
 	return book, nil
 }
 
@@ -100,6 +104,22 @@ func (b *HealthBook) Record(name string, health ReviewerHealth) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.entries[name] = health
+	return b.persist()
+}
+
+// Forget drops a reviewer's result, e.g. after its command or model changed.
+func (b *HealthBook) Forget(name string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if _, ok := b.entries[name]; !ok {
+		return nil
+	}
+	delete(b.entries, name)
+	return b.persist()
+}
+
+// persist writes the book; the caller holds b.mu.
+func (b *HealthBook) persist() error {
 	raw, err := json.MarshalIndent(b.entries, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode reviewer health: %w", err)
@@ -129,7 +149,7 @@ func classifyFailure(result runResult, logText string) (string, string) {
 	}
 	detail := lastLine(logText)
 	if detail == "" && result.Err != nil {
-		detail = result.Err.Error()
+		detail = explainRunError(result.Err)
 	}
 	return HealthError, detail
 }

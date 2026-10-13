@@ -210,10 +210,10 @@ func (m *Manager) run(ctx context.Context, target *project.Project, kind Kind, j
 			j.Error = "canceled"
 		case result.Err != nil && strings.TrimSpace(result.Output) == "":
 			j.Status = StatusFailed
-			j.Error = result.Err.Error() + tailOfLog(filepath.Join(reviewsDir, job.ID+".log"))
+			j.Error = explainRunError(result.Err) + tailOfLog(filepath.Join(reviewsDir, job.ID+".log"))
 		case result.Err != nil:
 			j.Status = StatusFailed
-			j.Error = result.Err.Error()
+			j.Error = explainRunError(result.Err)
 		case draftErr != nil:
 			j.Status = StatusFailed
 			j.Error = draftErr.Error()
@@ -526,9 +526,12 @@ func tailOfLog(path string) string {
 	if err != nil || len(raw) == 0 {
 		return ""
 	}
-	text := strings.TrimSpace(string(raw))
-	if len(text) > 600 {
-		text = "…" + text[len(text)-600:]
+	runes := []rune(strings.TrimSpace(ansiEscape.ReplaceAllString(string(raw), "")))
+	if len(runes) == 0 {
+		return ""
 	}
-	return "\n" + text
+	if len(runes) > 600 {
+		runes = append([]rune("…"), runes[len(runes)-600:]...)
+	}
+	return "\n" + i18n.T("Last lines from the agent:") + "\n" + string(runes)
 }

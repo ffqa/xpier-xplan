@@ -14,14 +14,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ReviewerDef describes how to invoke one agent CLI in a read-only mode.
-// Command is an argv template; the placeholders {prompt}, {prompt_file},
-// {path} and {xplan_home} are substituted at run time. No shell is involved.
-type ReviewerDef struct {
-	Description string   `yaml:"description" json:"description"`
-	Command     []string `yaml:"command" json:"command"`
-}
-
 // Config is the global configuration stored in <home>/config.yaml.
 type Config struct {
 	Listen               string                 `yaml:"listen" json:"listen"`
@@ -85,7 +77,7 @@ func Defaults() Config {
 		ReviewTimeout:        "20m",
 		MaxConcurrentReviews: 2,
 		DefaultReviewer:      AutoReviewer,
-		ReviewerOrder:        []string{"cursor-agent", "codex", "claude", "kimi", "gemini", "qwen", "opencode", "kiro", "omp"},
+		ReviewerOrder:        []string{"cursor-agent", "codex", "claude", "kimi", "gemini", "qwen", "opencode", "kiro", "devin", "omp"},
 		Language:             "en",
 		ReportLanguage:       "English",
 		DefaultSchedule: map[string]string{
@@ -95,47 +87,7 @@ func Defaults() Config {
 			"deploy":   "off",
 			"test":     "off",
 		},
-		Reviewers: map[string]ReviewerDef{
-			"cursor-agent": {
-				Description: "Cursor Agent in ask mode (read-only Q&A)",
-				Command:     []string{"cursor-agent", "-p", "--output-format", "text", "--mode", "ask", "--trust", "--workspace", "{path}", "{prompt}"},
-			},
-			"claude": {
-				Description: "Claude Code print mode limited to Read/Grep/Glob, without MCP servers",
-				// The tool flags are variadic: "=" keeps them from swallowing the prompt.
-				// --tools is the hard allowlist; --allowedTools alone still lets
-				// tools the user's own settings allow (Bash, MCP writers) through.
-				Command: []string{"claude", "-p", "{prompt}", "--tools=Read,Grep,Glob", "--allowedTools=Read,Grep,Glob", "--disallowedTools=Edit,Write,Bash,NotebookEdit", "--strict-mcp-config"},
-			},
-			"codex": {
-				Description: "Codex exec in read-only sandbox",
-				Command:     []string{"codex", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "-C", "{path}", "{prompt}"},
-			},
-			"omp": {
-				Description: "omp print mode with read-only tools",
-				Command:     []string{"omp", "-p", "--no-session", "--cwd", "{path}", "--tools", "read,grep,glob", "{prompt}"},
-			},
-			"kimi": {
-				Description: "Kimi Code prompt mode with a Read/Grep/Glob-only agent profile",
-				Command:     []string{"kimi", "-p", "{prompt}", "--agent-file", "{xplan_home}/" + KimiAgentFile},
-			},
-			"gemini": {
-				Description: "Gemini CLI headless mode; approval-required tools are denied",
-				Command:     []string{"gemini", "-p", "{prompt}", "--approval-mode", "default"},
-			},
-			"qwen": {
-				Description: "Qwen Code headless mode; approval-required tools are denied",
-				Command:     []string{"qwen", "-p", "{prompt}", "--approval-mode", "default"},
-			},
-			"opencode": {
-				Description: "OpenCode run with the read-only plan agent",
-				Command:     []string{"opencode", "run", "--agent", "plan", "{prompt}"},
-			},
-			"kiro": {
-				Description: "Kiro CLI non-interactive chat trusting only fs_read",
-				Command:     []string{"kiro-cli", "chat", "--no-interactive", "--trust-tools=fs_read", "{prompt}"},
-			},
-		},
+		Reviewers: BuiltinReviewers(),
 	}
 }
 
@@ -205,38 +157,22 @@ func merge(dst, src *Config) {
 		dst.DefaultSchedule[kind] = schedule
 	}
 	for name, def := range src.Reviewers {
-		if isLegacyPreset(name, def.Command) {
-			continue // keep the corrected built-in preset
+		if preset, isBuiltin := dst.Reviewers[name]; isBuiltin {
+			dst.Reviewers[name] = overlayReviewer(preset, def, name)
+			continue
 		}
-		dst.Reviewers[name] = def
-	}
-}
-
-// legacyPresets lists built-in commands that earlier versions wrote into
-// config.yaml and that are known to be broken.
-var legacyPresets = map[string][][]string{
-	"claude": {
-		// --disallowedTools is variadic and swallowed the prompt.
-		{"claude", "-p", "--allowedTools", "Read,Grep,Glob", "--disallowedTools", "Edit,Write,Bash,NotebookEdit", "{prompt}"},
-		// No hard tool allowlist and the user's MCP servers stayed loaded.
-		{"claude", "-p", "{prompt}", "--allowedTools=Read,Grep,Glob", "--disallowedTools=Edit,Write,Bash,NotebookEdit"},
-	},
-	// omp has no "ls" tool and rejects the whole list.
-	"omp": {{"omp", "-p", "--no-session", "--cwd", "{path}", "--tools", "read,grep,find,ls", "{prompt}"}},
-}
-
-func isLegacyPreset(name string, command []string) bool {
-	for _, legacy := range legacyPresets[name] {
-		if slices.Equal(legacy, command) {
-			return true
+		if len(def.Command) > 0 {
+			dst.Reviewers[name] = def
 		}
 	}
-	return false
 }
 
-// Save writes the config atomically.
+// Save writes the config atomically. Built-in reviewers are stored only as
+// the fields that differ from the preset.
 func Save(home string, cfg *Config) error {
-	raw, err := yaml.Marshal(cfg)
+	stored := *cfg
+	stored.Reviewers = storedReviewers(cfg.Reviewers)
+	raw, err := yaml.Marshal(&stored)
 	if err != nil {
 		return fmt.Errorf("encode config: %w", err)
 	}
@@ -251,6 +187,11 @@ func (c *Config) ScanEvery() time.Duration {
 // ReviewDeadline parses ReviewTimeout, falling back to 20 minutes.
 func (c *Config) ReviewDeadline() time.Duration {
 	return parseDurationOr(c.ReviewTimeout, 20*time.Minute)
+}
+
+// ReviewDeadlineFor is the reviewer's own timeout, or the global one.
+func (c *Config) ReviewDeadlineFor(name string) time.Duration {
+	return parseDurationOr(c.Reviewers[name].Timeout, c.ReviewDeadline())
 }
 
 // ReviewerNames returns the configured reviewer names in stable order.

@@ -3,6 +3,45 @@
 All notable changes to xplan are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-10-13
+
+### Added
+
+- Per-reviewer **model**, **agent** and **timeout**. Commands take the new
+  `{model}` and `{agent}` placeholders; an argument holding an empty one is
+  dropped, so the agent keeps its own default. Every built-in preset now has a
+  model setting; `claude`, `opencode` and `kiro` also have an agent setting.
+- Settings → Reviewer agents: edit any reviewer, add your own (any CLI agent),
+  reset a changed preset, delete a custom one. API:
+  `PUT /api/reviewers/{name}` and `DELETE /api/reviewers/{name}`.
+- Templates for third-party agents: `codebuddy` (Tencent CodeBuddy Code),
+  `qodercli` (Qoder CLI) and `claude-provider` (Claude Code on any
+  Anthropic-compatible provider through a settings file).
+- Built-in `devin` preset (Devin CLI print mode, verified read-only).
+- `/api/meta` reviewers report `command`, `model`, `agent`, `timeout`,
+  `effective_timeout`, `supports_model`, `supports_agent`, `builtin` and
+  `modified`, plus `reviewer_templates`.
+
+### Changed
+
+- Timeouts explain themselves: "No answer within 20m…" with likely causes
+  (rate-limited model, quiet retries, big project), what to change, and the
+  agent's last output lines.
+- `omp` starts without skills, extensions, rules, LSP and title generation
+  (smoke test about 30 s → 5 s).
+- `config.yaml` stores only the fields you changed on built-in presets, so
+  preset fixes keep reaching you. Built-in commands written in full by
+  v0.1–v0.3 are dropped on load; commands you edited are kept.
+- Built-in preset descriptions are translated in the Chinese UI.
+
+### Fixed
+
+- An agent that exits 0 with no output, or with only a short login message
+  (seen with `codebuddy` and `qodercli` when logged out), counts as failed, and
+  `auto` moves on to the next reviewer.
+- Saved health details from older versions no longer show terminal color codes.
+- Editing, resetting or deleting a reviewer forgets its old health result.
+
 ## [0.3.0] - 2026-10-12
 
 ### Added
