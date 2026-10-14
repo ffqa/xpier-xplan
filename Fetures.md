@@ -35,6 +35,9 @@ flowchart LR
 | Reviews         | Read-only agent reviews: drift, code, security, deploy, test, ask, intent drafts |
 | Console         | Slash commands and free-form questions per project                               |
 | Web UI          | IDE layout: sidebar, tabs, board, inbox, palette (⌘K), console (⌘J)              |
+| Service         | `xplan service install` keeps it running at login, so scheduled reviews run      |
+| Notifications   | Desktop or chat webhook when a review needs attention or fails                   |
+| Agent memory    | MCP endpoint: agents read intent, decisions, park notes; write notes and ADRs    |
 
 ## 2. Registry
 
@@ -195,6 +198,20 @@ flowchart TD
 - **Inbox**: `GET /api/inbox` → open findings across projects, newest first.
 - **Report links**: file references such as `/abs/project/bin/x.py:584` open
   the file in the Docs tab; paths outside the project render as plain text.
+- **Drift and other projects**: a drift prompt also lists up to 8 other
+  registered projects (name, summary, the Goal bullets of their intent, stack,
+  tags, last activity), most recently active first. The reviewer uses them only
+  to spot concepts borrowed from a sibling project and must name the project
+  each one seems to come from. Shared generic technology (same language or
+  framework) is not counted. Other review kinds do not get this list.
+
+```mermaid
+flowchart LR
+  S[Other registered projects] -->|name, summary, goal, stack| P[Drift prompt]
+  I[This project's intent + docs + git] --> P
+  P --> A[Reviewer agent]
+  A -->|"concept X looks like it comes from project B"| F[Finding]
+```
 
 ### Reviewer presets
 
@@ -352,8 +369,10 @@ Open with ⌘J. Plain text asks the project's reviewer a read-only question.
 | `/scan`         |                                            | Rescan now                          |
 | `/caught-up`    |                                            | Record the visit                    |
 | `/xteam`        | `<message>` or `status`                    | Ring the project's xteam PM         |
-| `/open`         |                                            | Open the project in Cursor          |
+| `/open`         |                                            | Cursor, VS Code or the file manager |
 | `/help`         |                                            | List commands                       |
+
+`/xteam` is listed only when the `xteam` CLI is installed.
 
 API: `POST /api/projects/{slug}/console` with `{"input": "..."}` →
 `{"ok", "output", "job_id"?, "job_ids"?, "refresh"?}`; `GET` returns
@@ -373,14 +392,16 @@ API: `POST /api/projects/{slug}/console` with `{"input": "..."}` →
 | `report_language`        | `English`                                                                   | Language the agent writes reports in                 |
 | `default_schedule`       | drift and security weekly, others off                                       | Copied into newly registered projects                |
 | `reviewers`              | empty (presets are built in)                                                | Preset overrides and custom reviewers (see 6.1)      |
+| `notify`                 | desktop on, `min_verdict: attention`, no webhook                            | Notifications (see 10)                               |
 
 `GET /api/config`, `PATCH /api/config` (any subset of the editable keys).
 Reviewers are edited through `PUT` / `DELETE /api/reviewers/{name}` instead.
 Commands that v0.1–v0.3 wrote in full for built-in presets are recognized and
 dropped on load, so those presets pick up the current command; any command you
 edited yourself is kept.
-`400` for an unknown `default_reviewer`, an unknown name in `reviewer_order` or
-a `language` other than `en` and `zh`.
+`400` for an unknown `default_reviewer`, an unknown name in `reviewer_order`,
+a `language` other than `en` and `zh`, a `notify.min_verdict` other than
+`attention` and `critical`, or a webhook that is not an http(s) URL.
 
 ### 8.1 Languages
 
@@ -404,7 +425,148 @@ a `language` other than `en` and `zh`.
   fail when a translatable string has no Chinese entry or a translation drops a
   placeholder.
 
-## 9. Errors
+## 9. Background service
+
+Scheduled reviews, notifications and the MCP endpoint only work while
+`xplan serve` runs. The service command keeps it running at login and restarts
+it after a crash.
+
+```mermaid
+flowchart LR
+  I[xplan service install] --> C{Port already in use?}
+  C -- by another process --> X[Refuse, write nothing]
+  C -- free / by the service --> U[Write unit file]
+  U --> L[launchd on macOS / systemd --user on Linux]
+  L --> S[xplan serve --log-file ~/.xplan/logs/serve.log]
+  S --> R[Scheduler, notifications, MCP]
+```
+
+| Command                   | Effect                                                             |
+| ------------------------- | ------------------------------------------------------------------ |
+| `xplan service install`   | Write and load the unit, wait until the API answers, print the URL |
+| `xplan service status`    | Manager, installed, running, PID and unit file                     |
+| `xplan service restart`   | Restart, for example after rebuilding the binary                   |
+| `xplan service uninstall` | Stop and remove the unit                                           |
+
+- **macOS**: LaunchAgent `~/Library/LaunchAgents/com.ffqa.xplan.plist`,
+  restarted on crash (`KeepAlive` on failure, 10 s throttle).
+- **Linux**: user unit `~/.config/systemd/user/xplan.service`
+  (`Restart=on-failure`). Run `loginctl enable-linger $USER` to keep it running
+  after logout.
+- **Windows**: not supported yet; run `xplan serve` yourself.
+- **Logs**: `~/.xplan/logs/serve.log`, rotated at 5 MB (one `.1` kept); crash
+  output goes to `serve.crash.log`. `xplan serve --log-file PATH` does the same
+  in the foreground.
+- **PATH**: the unit stores the PATH of the shell that ran `install`, plus the
+  usual agent folders, so reviewers are found without a login shell.
+
+## 10. Notifications
+
+```mermaid
+flowchart TD
+  J[Review job finished] --> F{Failed?}
+  F -- yes --> N[Notify]
+  F -- no --> V{verdict at or above min_verdict?}
+  V -- yes --> N
+  V -- no --> Q[Stay quiet]
+  N --> D[Desktop notification]
+  N --> W[Chat webhook]
+```
+
+- **When**: a review (drift, code, security, deploy, test) that failed, or
+  finished with a verdict at or above `min_verdict` (`attention` or
+  `critical`; an unknown verdict counts as attention). Asks and intent drafts
+  never notify.
+- **Desktop**: macOS Notification Center or Linux `notify-send`; Settings shows
+  it as unavailable elsewhere.
+- **Webhook**: the format follows the host: Slack, Feishu/Lark, DingTalk (add
+  the keyword `xplan` to the bot), WeCom, Discord; any other URL receives JSON
+  with `text` plus `project`, `kind`, `status`, `verdict`, `score` and `url`.
+  Errors a chat API reports inside a `200` response are detected.
+- **Secret handling**: the webhook URL is saved in `config.yaml` but never
+  returned by the API; the UI shows `https://host/…abcd`, and errors redact it.
+- **Settings**: Settings → Notifications saves each change at once and has a
+  "Send a test" button.
+
+| Endpoint                     | Body / result                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| `PATCH /api/config`          | `{"notify": {"desktop"?, "min_verdict"?, "webhook_url"?}}`; `""` removes it    |
+| `GET /api/config` → `notify` | `{desktop, desktop_available, min_verdict, webhook_set, webhook_hint}`         |
+| `POST /api/notify/test`      | `{"results": [{"channel", "ok", "error"?}]}`; `400` when no channel is enabled |
+
+## 11. Agent memory (MCP)
+
+xplan serves the [Model Context Protocol](https://modelcontextprotocol.io) at
+`http://127.0.0.1:7788/mcp`, so coding agents can use each project's record as
+memory. It is project-scoped: the intent, decisions, park notes, notes and
+review findings xplan already keeps. It is not a general-purpose memory store,
+and no tool can change the intent.
+
+```mermaid
+sequenceDiagram
+  participant A as Coding agent
+  participant X as xplan /mcp
+  A->>X: xplan_context {path: working dir}
+  X-->>A: intent, ADRs, last park note, notes, verdicts, findings
+  A->>A: work on the task
+  A->>X: xplan_propose_adr {title, decision}
+  A->>X: xplan_park {stopped, next, open}
+  X-->>A: saved (owner sees it in the brief)
+```
+
+| Tool                 | Reads / writes | Input                                                              |
+| -------------------- | -------------- | ------------------------------------------------------------------ |
+| `xplan_projects`     | reads          | `status?`                                                          |
+| `xplan_context`      | reads          | `path` or `project`                                                |
+| `xplan_park`         | writes         | `path`/`project`, `stopped?`, `next?`, `open?`                     |
+| `xplan_note`         | writes         | `path`/`project`, `text` (at most 4000 characters)                 |
+| `xplan_propose_adr`  | writes         | `path`/`project`, `title`, `decision`, `context?`, `consequences?` |
+| `xplan_inbox`        | reads          | `path`/`project`?, `min_severity?` (default `high`)                |
+| `xplan_start_review` | writes         | `path`/`project`, `kind`, `question?`                              |
+| `xplan_get_review`   | reads          | `path`/`project`, `id?`, `kind?`                                   |
+
+- **Project lookup**: `path` is the agent's working directory; the deepest
+  registered project that contains it wins (symlinks resolved). `project`
+  takes a slug or a project name.
+- **Limits**: proposed ADRs always get status `proposed` and a
+  "Proposed by: an agent (xplan MCP)" line; the owner accepts them. Agents
+  cannot start intent drafts. Notes and park fields are capped at 4000
+  characters.
+- **Connect**: Settings → Agent memory (MCP) has copy-ready setup for Cursor
+  (`~/.cursor/mcp.json` with `"url"`), Claude Code (`claude mcp add --transport
+http`), Codex and any stdio-only agent (`xplan mcp`, a bridge that forwards
+  stdin to the running server), plus a rule to paste into AGENTS.md.
+- **Transport**: Streamable HTTP with JSON responses, no sessions and no
+  server-sent streams (`GET` → `405`). Protocol versions 2025-11-25,
+  2025-06-18, 2025-03-26 and 2024-11-05. Tool errors come back as results with
+  `isError: true`.
+- **Security**: only loopback `Host` headers; a browser `Origin` other than
+  localhost is refused (`403`). MCP clients cannot send `X-Xplan`, so `/mcp` is
+  the one path exempt from it.
+- **Info**: `GET /api/mcp` → `{"url", "binary", "tools": [{name, title,
+description, read_only}]}` (used by the settings card).
+
+## 12. Installing and releases
+
+- **Install**: `curl -fsSL https://raw.githubusercontent.com/ffqa/xpier-xplan/main/scripts/install.sh | sh`
+  downloads the latest release for macOS or Linux (amd64 or arm64), checks its
+  SHA-256 and installs `~/.local/bin/xplan` (`XPLAN_INSTALL_DIR`,
+  `XPLAN_VERSION` override). Windows: download the zip from the releases page.
+- **Release**: pushing a tag `vX.Y.Z` runs `.github/workflows/release.yml`. It
+  checks that the tag matches `app.Version` and that `CHANGELOG.md` has the
+  section, builds the web UI once, runs the tests, cross-compiles six targets
+  with the UI embedded and publishes them with `checksums.txt`.
+- **CI**: `.github/workflows/ci.yml` runs translations, type check, bundle,
+  `gofmt`, `go vet` and the HTTP tests on Linux and macOS, and compiles every
+  release target.
+- **`go install`**: works, but `web/dist` is not in git, so that binary has no
+  UI. The page then says where to get a full build; the API and MCP still work.
+- **Windows**: builds and runs `xplan serve`. Agents are found through
+  `PATHEXT` (npm `.cmd` shims) and a review is stopped with `taskkill /T`.
+  There is no background service or desktop notification yet, and npm shims may
+  mangle multi-line prompts, so treat it as experimental.
+
+## 13. Errors
 
 All API errors return `{"error": "message"}`:
 
@@ -416,7 +578,11 @@ All API errors return `{"error": "message"}`:
 | `409`  | The same review kind is already running; deleting a reviewer that is still in use     |
 | `415`  | Binary or oversized file                                                              |
 
-## 10. Retrospective (v0.1.0)
+`/mcp` answers in JSON-RPC instead: protocol errors (`-32700` invalid JSON,
+`-32601` unknown method, `-32602` unknown tool) in `error`, tool failures as a
+result with `isError: true` and a sentence the agent can act on.
+
+## 14. Retrospective (v0.1.0)
 
 **What went well**
 
@@ -438,7 +604,7 @@ All API errors return `{"error": "message"}`:
 - The UI bundle is about 730 KB (225 KB gzipped). That is fine for a local tool,
   but Markdown rendering could be lazy-loaded.
 
-## 11. Retrospective (v0.2.0, intent drafts)
+## 15. Retrospective (v0.2.0, intent drafts)
 
 **What went well**
 
@@ -465,7 +631,7 @@ All API errors return `{"error": "message"}`:
 - Finding lifecycle (acknowledge or dismiss) so the Inbox only shows new items.
 - A changing default schedule could offer to update existing projects.
 
-## 12. Retrospective (v0.3.0, languages and more reviewers)
+## 16. Retrospective (v0.3.0, languages and more reviewers)
 
 **What went well**
 
@@ -501,7 +667,7 @@ gateway` while Claude Code retried up to 11 times. The smoke test shows it as
   `opencode auth login`).
 - Lazy-load Markdown rendering; the bundle is now about 770 KB (240 KB gzipped).
 
-## 13. Retrospective (v0.4.0, reviewer management)
+## 17. Retrospective (v0.4.0, reviewer management)
 
 **Root cause of "timed out after 20m0s / Working..."**
 
@@ -539,3 +705,40 @@ gateway` while Claude Code retried up to 11 times. The smoke test shows it as
   visible before the timeout.
 - Learn a reviewer's typical duration from finished reviews and suggest a
   timeout.
+
+## 18. Retrospective (v0.5.0, service, notifications, MCP, delivery)
+
+**What went well**
+
+- xplan's own first drift review found the gap that mattered most: drift could
+  not detect contamination because the prompt never saw the other projects.
+- Building MCP into the server, instead of as a separate process, kept one
+  writer for every record; the `xplan mcp` stdio bridge only forwards lines,
+  so stdio-only agents get the same guarantees.
+- A hand-written JSON-RPC layer of about 300 lines was enough for a tools-only
+  server. HTTP tests cover the protocol, and the official MCP Inspector client
+  listed and called the tools against the live server.
+- Moving the inbox query into `app` and the listen-address logic into `config`
+  removed two copies before MCP would have added a third.
+- Running the test suite with an empty home directory and a bare PATH
+  reproduced CI before any workflow existed; it passed.
+
+**Problems found**
+
+- `--listen` was never stored, so notification links pointed at the config
+  port. The app now records the address it serves on.
+- The webhook test against an unreachable host takes the full 15-second
+  timeout; the UI keeps the button busy, but a shorter test timeout would be
+  kinder.
+- `npm run build` deleted `web/dist/.gitkeep`, which fresh clones need for
+  `go:embed`. The build script now recreates it.
+- A background server started with `nohup … &` from a tool shell died with the
+  shell again (see `docs/diary.md`).
+
+**Still open**
+
+- Old reviews are never pruned (about 1.7 MB in three days on one project).
+- Reports rely on the prompt to keep secrets out; there is no redaction pass.
+- Team sharing (several people on one xplan) is not designed yet.
+- Windows has no background service or desktop notification, and npm `.cmd`
+  shims may mangle multi-line prompts.

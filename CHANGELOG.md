@@ -3,6 +3,50 @@
 All notable changes to xplan are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-10-14
+
+### Added
+
+- **Agent memory over MCP** at `http://127.0.0.1:7788/mcp`. Eight tools:
+  `xplan_projects`, `xplan_context`, `xplan_park`, `xplan_note`,
+  `xplan_propose_adr`, `xplan_inbox`, `xplan_start_review`, `xplan_get_review`.
+  Agents pass their working directory and xplan finds the project. No tool can
+  change the intent; proposed ADRs stay `proposed` until the owner decides.
+  `xplan mcp` is a stdio bridge for agents without HTTP MCP. Settings → Agent
+  memory (MCP) has copy-ready setup for Cursor, Claude Code, Codex and others.
+- **Background service**: `xplan service install|uninstall|restart|status`
+  (launchd on macOS, systemd user unit on Linux) so scheduled reviews,
+  notifications and MCP keep running. `xplan serve --log-file PATH` writes a log
+  rotated at 5 MB.
+- **Notifications** when a review needs attention (or only when critical) or
+  fails: desktop (macOS, Linux) and a chat webhook in the right format for
+  Slack, Feishu/Lark, DingTalk, WeCom, Discord or plain JSON. Settings →
+  Notifications with a test button; `POST /api/notify/test`. The webhook URL
+  is never returned by the API.
+- Drift reviews see the other registered projects (summary, goal, stack, last
+  activity) and must name the project a borrowed concept seems to come from.
+- Release pipeline: CI on Linux and macOS, tagged releases for macOS, Linux and
+  Windows (amd64 and arm64) with checksums, and `scripts/install.sh`.
+- MIT `LICENSE` and `web/package-lock.json`.
+
+### Changed
+
+- Windows builds: agents are found through `PATHEXT`, and a review is stopped
+  with `taskkill /T`.
+- Agent search paths cover nvm, fnm, Volta, Bun, Go and Homebrew on Linux, not
+  only this machine's setup.
+- `/open` falls back to VS Code or the system file manager; `/xteam` is listed
+  only when xteam is installed.
+- A binary built without the web UI (for example with `go install`) explains
+  where to get a full build.
+- Links in notifications and the MCP address use `127.0.0.1` and follow
+  `serve --listen`.
+
+### Fixed
+
+- `npm run build` no longer deletes `web/dist/.gitkeep`, which fresh clones need
+  to compile.
+
 ## [0.4.0] - 2026-10-13
 
 ### Added

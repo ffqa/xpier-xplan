@@ -18,6 +18,7 @@ import (
 	"github.com/ffqa/xpier-xplan/internal/app"
 	"github.com/ffqa/xpier-xplan/internal/config"
 	"github.com/ffqa/xpier-xplan/internal/console"
+	"github.com/ffqa/xpier-xplan/internal/mcp"
 	"github.com/ffqa/xpier-xplan/internal/project"
 	"github.com/ffqa/xpier-xplan/internal/review"
 	"github.com/ffqa/xpier-xplan/internal/scanner"
@@ -30,13 +31,14 @@ const maxBodyBytes = 1 << 20
 type Server struct {
 	app     *app.App
 	console *console.Console
+	mcp     *mcp.Handler
 	static  fs.FS
 	logger  *log.Logger
 }
 
 // New builds the full handler chain. static may be nil (API only).
 func New(application *app.App, static fs.FS) http.Handler {
-	srv := &Server{app: application, console: &console.Console{App: application}, static: static, logger: application.Logger}
+	srv := &Server{app: application, console: &console.Console{App: application}, mcp: mcp.New(application), static: static, logger: application.Logger}
 	mux := http.NewServeMux()
 	srv.routes(mux)
 	return srv.recoverPanics(srv.guard(srv.logRequests(mux)))
@@ -55,6 +57,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/reviewers/{name}/test", s.handleTestReviewer)
 	mux.HandleFunc("PUT /api/reviewers/{name}", s.handlePutReviewer)
 	mux.HandleFunc("DELETE /api/reviewers/{name}", s.handleDeleteReviewer)
+	mux.HandleFunc("POST /api/notify/test", s.handleTestNotify)
+	mux.HandleFunc("GET /api/mcp", s.handleMCPInfo)
+	mux.Handle(mcp.Path, s.mcp)
 	mux.HandleFunc("POST /api/projects", s.handleAddProject)
 
 	mux.HandleFunc("GET /api/projects/{slug}", s.handleGetProject)
@@ -92,11 +97,16 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 // guard rejects requests that could come from another website: the Host
 // header must be loopback (DNS rebinding) and state-changing requests must
-// carry X-Xplan: 1, which a cross-site form cannot set.
+// carry X-Xplan: 1, which a cross-site form cannot set. MCP clients cannot
+// add that header, so the MCP handler checks the Origin header instead.
 func (s *Server) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !loopbackHost(r.Host) {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "xplan only answers on localhost"})
+			return
+		}
+		if r.URL.Path == mcp.Path {
+			next.ServeHTTP(w, r)
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get("X-Xplan") != "1" {
@@ -132,7 +142,7 @@ func (r *statusRecorder) WriteHeader(status int) {
 
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/api/") {
+		if !strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != mcp.Path {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -157,9 +167,16 @@ func (s *Server) recoverPanics(next http.Handler) http.Handler {
 	})
 }
 
+// uiMissing explains a binary built without the web UI (for example by
+// `go install`, since web/dist is not in git).
+const uiMissing = "This xplan binary was built without its web UI.\n\n" +
+	"Download a release build: https://github.com/ffqa/xpier-xplan/releases\n" +
+	"or build from a clone: make build\n\n" +
+	"The API and MCP endpoint work without it."
+
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	if s.static == nil {
-		http.Error(w, "UI not built. Run `make web`.", http.StatusNotFound)
+		http.Error(w, uiMissing, http.StatusNotFound)
 		return
 	}
 	cleaned := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
@@ -171,7 +188,7 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	}
 	content, err := fs.ReadFile(s.static, cleaned)
 	if err != nil {
-		http.Error(w, "UI not built. Run `make web`.", http.StatusNotFound)
+		http.Error(w, uiMissing, http.StatusNotFound)
 		return
 	}
 	if strings.HasPrefix(cleaned, "assets/") {

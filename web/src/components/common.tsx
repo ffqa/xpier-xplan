@@ -3,6 +3,22 @@ import { Loader2Icon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+/** Left-column label of a settings row, with an optional one-line hint. */
+export function FieldLabel({
+  children,
+  hint,
+}: {
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <div className="text-[13px]">{children}</div>
+      {hint && <div className="text-[11px] text-muted-foreground">{hint}</div>}
+    </div>
+  );
+}
+
 /** Titled block used across tabs (IDE "panel section" look). */
 export function Section({
   title,

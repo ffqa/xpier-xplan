@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ffqa/xpier-xplan/internal/app"
+	"github.com/ffqa/xpier-xplan/internal/desktop"
 	"github.com/ffqa/xpier-xplan/internal/i18n"
 	"github.com/ffqa/xpier-xplan/internal/project"
 	"github.com/ffqa/xpier-xplan/internal/review"
@@ -57,18 +58,22 @@ var Commands = []Command{
 	{"/scan", "", "Rescan docs, git and progress now"},
 	{"/caught-up", "", "Mark everything as seen"},
 	{"/xteam", "<message> | status", "Ring the project's xteam PM, or show xteam status"},
-	{"/open", "", "Open the project in Cursor"},
+	{"/open", "", "Open the project in Cursor, VS Code or the file manager"},
 	{"/help", "", "List commands"},
 }
 
 // LocalizedCommands returns Commands with arguments and summaries in the UI
-// language.
+// language. /xteam is listed only where the xteam CLI is installed.
 func LocalizedCommands() []Command {
-	localized := make([]Command, len(Commands))
-	for index, command := range Commands {
+	_, xteamErr := review.LookupAgent("xteam")
+	localized := make([]Command, 0, len(Commands))
+	for _, command := range Commands {
+		if command.Name == "/xteam" && xteamErr != nil {
+			continue
+		}
 		command.Args = i18n.T(command.Args)
 		command.Summary = i18n.T(command.Summary)
-		localized[index] = command
+		localized = append(localized, command)
 	}
 	return localized
 }
@@ -262,17 +267,26 @@ func (c *Console) xteam(target *project.Project, args string) Result {
 	return Result{OK: true, Output: nonEmpty(strings.TrimSpace(output), i18n.T("Delivered to xteam pm."))}
 }
 
+// editors are tried in order by /open before falling back to the file manager.
+var editors = []struct{ binary, name string }{
+	{"cursor", "Cursor"},
+	{"code", "VS Code"},
+}
+
 func (c *Console) open(target *project.Project) Result {
-	if _, err := review.LookupAgent("cursor"); err == nil {
-		if output, err := runExternal(target.Path, "cursor", target.Path); err != nil {
+	for _, editor := range editors {
+		if _, err := review.LookupAgent(editor.binary); err != nil {
+			continue
+		}
+		if output, err := runExternal(target.Path, editor.binary, target.Path); err != nil {
 			return Result{OK: false, Output: strings.TrimSpace(output + "\n" + err.Error())}
 		}
-		return Result{OK: true, Output: i18n.T("Opened in Cursor.")}
+		return Result{OK: true, Output: i18n.T("Opened in %s.", editor.name)}
 	}
-	if output, err := runExternal(target.Path, "open", target.Path); err != nil {
-		return Result{OK: false, Output: strings.TrimSpace(output + "\n" + err.Error())}
+	if err := desktop.Open(target.Path); err != nil {
+		return Result{OK: false, Output: err.Error()}
 	}
-	return Result{OK: true, Output: i18n.T("Opened in Finder.")}
+	return Result{OK: true, Output: i18n.T("Opened in %s.", i18n.T(desktop.FileManager()))}
 }
 
 // History returns the newest console lines first.

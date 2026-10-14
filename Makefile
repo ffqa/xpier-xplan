@@ -4,10 +4,10 @@ BIN := xplan
 
 all: build
 
-# vite empties dist/ on every build; .gitkeep keeps go:embed happy on fresh clones.
+# vite empties dist/ on every build; the npm script restores .gitkeep, which
+# keeps go:embed happy on fresh clones.
 web:
-	cd web && npx tsc -b && npx vite build
-	touch web/dist/.gitkeep
+	cd web && (test -d node_modules || npm ci) && npm run build
 
 build: web
 	go build -o $(BIN) ./cmd/xplan

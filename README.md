@@ -26,7 +26,14 @@ asks a **read-only** agent to review the project from the outside.
   server messages; reports can be written in Chinese too.
 - **Read-only by design**: xplan never writes into a project, agents run in their
   read-only modes, and a guard flags any working-tree change made during a review.
+- **Agent memory (MCP)**: coding agents read a project's intent, decisions, park
+  notes and findings at `http://127.0.0.1:7788/mcp`, and leave park notes, notes
+  and proposed decisions. They cannot change the intent.
+- **Runs in the background**: `xplan service install` keeps it running at login,
+  so scheduled reviews run, and it notifies you (desktop or Slack, Feishu,
+  DingTalk, WeCom, Discord) when a review needs attention.
 - **One binary**: Go backend with the React UI embedded. State is plain files.
+  macOS and Linux; Windows is experimental.
 
 See [docs/design.md](docs/design.md) for the design and flowcharts, and
 [Fetures.md](Fetures.md) for every feature, API and parameter.
@@ -34,13 +41,35 @@ See [docs/design.md](docs/design.md) for the design and flowcharts, and
 ## Quick start
 
 ```bash
-make build                 # builds web/dist and the Go binary
-./xplan add ~/code/my-app  # register a project (or: ./xplan discover ~/code --add)
-./xplan serve --open       # http://localhost:7788
+curl -fsSL https://raw.githubusercontent.com/ffqa/xpier-xplan/main/scripts/install.sh | sh
+xplan service install          # keep it running at login (launchd / systemd --user)
+xplan add ~/code/my-app        # register a project (or: xplan discover ~/code --add)
 ```
 
-Open `http://localhost:7788` (some embedded browsers render an empty page for
-`127.0.0.1`, while `localhost` works).
+Then open `http://localhost:7788`. Windows: download the zip from
+[Releases](https://github.com/ffqa/xpier-xplan/releases) and run `xplan serve`.
+
+From a clone: `make build && ./xplan serve --open`.
+
+Some embedded browsers render an empty page for `127.0.0.1`, while `localhost`
+works.
+
+## Connect your coding agents
+
+Settings → Agent memory (MCP) shows copy-ready setup. In short:
+
+```jsonc
+// Cursor: ~/.cursor/mcp.json
+{ "mcpServers": { "xplan": { "url": "http://127.0.0.1:7788/mcp" } } }
+```
+
+```bash
+claude mcp add --transport http --scope user xplan http://127.0.0.1:7788/mcp   # Claude Code
+```
+
+Agents that only start commands use the stdio bridge: `xplan mcp`. Add a line
+to your agent rules so they use it: call `xplan_context` with the working
+directory at the start, and `xplan_park` before stopping.
 
 ## Requirements
 
@@ -62,7 +91,10 @@ faster model or give that reviewer a longer timeout (for example `40m`).
 ```text
 xplan [--home DIR] <command> [args]
 
-serve [--listen ADDR] [--no-schedule] [--open]   Start the web UI (default 127.0.0.1:7788)
+serve [--listen ADDR] [--no-schedule] [--open] [--log-file PATH]
+                                                  Start the web UI (default 127.0.0.1:7788)
+service install|uninstall|restart|status          Run serve in the background at login
+mcp [--url URL]                                   Stdio bridge to the running server's MCP endpoint
 add <path> [--name NAME]                          Register a project directory
 discover <root> [--add]                           List (or register) git repos under root
 list                                              List registered projects
@@ -80,16 +112,18 @@ Home defaults to `$XPLAN_HOME`, then `~/.xplan`.
 ```bash
 make dev    # Go backend on :7788 + Vite dev server on :5178 (proxies /api)
 make test   # Go HTTP API tests (temp home, status codes and response shape)
-make web    # type-check and build the UI into web/dist
+make web    # npm ci if needed, type-check and build the UI into web/dist
 cd web && npm run i18n:check   # every t("...") string has a Chinese entry
 ```
 
 Translations: web strings in `web/src/i18n/zh/*.ts`, server strings in
 `internal/i18n/zh.go`. The English text is the key.
 
-`web/node_modules` has no lockfile yet: it was assembled offline because the
-registry was too slow on the original machine. On a normal network,
-`cd web && npm install` restores it from `package.json` (versions are pinned).
+After rebuilding while the service runs: `xplan service restart`.
+
+Releases: bump `Version` in `internal/app/app.go` and `web/package.json`, add a
+`CHANGELOG.md` section, then push a tag `vX.Y.Z`. The release workflow checks
+both, runs the tests and publishes binaries for macOS, Linux and Windows.
 
 ## Layout
 
@@ -102,8 +136,13 @@ internal/scanner    git, docs, checklists, .xteam slices, stack detection
 internal/insight    health flags, overview, brief, inbox
 internal/review     prompts, agent runner, auto pick and health, job store, tree guard
 internal/console    slash commands and free-form questions
+internal/mcp        MCP endpoint: JSON-RPC, project lookup, tools
+internal/notify     desktop and chat webhook notifications
+internal/service    launchd / systemd user service
+internal/desktop    open URLs and files, desktop notifications per OS
 internal/server     HTTP API + embedded SPA + local-only guards
 web/                Vite + React 19 + Tailwind v4 + shadcn-style components
+scripts/install.sh  release installer for macOS and Linux
 ```
 
 ## Security
@@ -113,3 +152,12 @@ web/                Vite + React 19 + Tailwind v4 + shadcn-style components
 - File reads are confined to the project root (after resolving symlinks).
   `.env*`, keys, certificates, `secrets/` and `.ssh/` are never served.
 - Agents are started with an argv list (no shell) and a timeout.
+- `/mcp` cannot require `X-Xplan` (MCP clients do not send it), so it refuses
+  any browser `Origin` other than localhost instead, besides the loopback
+  `Host` check.
+- The notification webhook URL is a secret: it stays in `config.yaml` and the
+  API only returns a masked hint.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

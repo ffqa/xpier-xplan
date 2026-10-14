@@ -11,7 +11,10 @@ import type {
   InboxItem,
   Intent,
   Job,
+  McpInfo,
   Meta,
+  NotifyPatch,
+  NotifyResult,
   Project,
   ReviewerDef,
   ReviewerHealth,
@@ -59,8 +62,13 @@ const p = (slug: string) => `/api/projects/${enc(slug)}`;
 export const api = {
   meta: () => request<Meta>("GET", "/api/meta"),
   config: () => request<Config>("GET", "/api/config"),
-  patchConfig: (patch: Partial<Config>) =>
+  patchConfig: (patch: Partial<Omit<Config, "notify">>) =>
     request<Config>("PATCH", "/api/config", patch),
+  patchNotify: (notify: NotifyPatch) =>
+    request<Config>("PATCH", "/api/config", { notify }),
+  testNotify: () =>
+    request<{ results: NotifyResult[] }>("POST", "/api/notify/test"),
+  mcpInfo: () => request<McpInfo>("GET", "/api/mcp"),
   testReviewer: (name: string) =>
     request<{ name: string; health: ReviewerHealth; health_label: string }>(
       "POST",

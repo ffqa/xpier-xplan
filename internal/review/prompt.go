@@ -21,6 +21,7 @@ type PromptInput struct {
 	Language     string
 	ProjectNotes string
 	FirstCommits []scanner.Commit
+	Siblings     []SiblingProject
 }
 
 // Size caps keep the prompt well below argv limits and model context.
@@ -50,6 +51,7 @@ func BuildPrompt(input PromptInput) string {
 	writePark(&b, input.LastPark)
 	writeSnapshot(&b, input.Snapshot)
 	writeFirstCommits(&b, input.FirstCommits)
+	writeSiblings(&b, input.Siblings)
 	writePrevious(&b, input.PreviousJob)
 
 	fmt.Fprintf(&b, "## Your task: %s\n\n%s\n\n", input.Kind.Title, input.Kind.Instructions)

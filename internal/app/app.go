@@ -14,23 +14,27 @@ import (
 	"github.com/ffqa/xpier-xplan/internal/config"
 	"github.com/ffqa/xpier-xplan/internal/i18n"
 	"github.com/ffqa/xpier-xplan/internal/insight"
+	"github.com/ffqa/xpier-xplan/internal/notify"
 	"github.com/ffqa/xpier-xplan/internal/project"
 	"github.com/ffqa/xpier-xplan/internal/review"
 	"github.com/ffqa/xpier-xplan/internal/scanner"
 )
 
 // Version is overridden at build time via -ldflags.
-var Version = "0.4.0"
+var Version = "0.5.0"
 
 // App is the shared service.
 type App struct {
-	Home    string
-	Store   *project.Store
-	Reviews *review.Manager
-	Logger  *log.Logger
+	Home     string
+	Store    *project.Store
+	Reviews  *review.Manager
+	Notifier *notify.Notifier
+	Logger   *log.Logger
 
 	cfgMu sync.RWMutex
 	cfg   *config.Config
+	// listen is the address serve listens on when --listen overrides config.
+	listen string
 
 	scanMu sync.Mutex
 }
@@ -48,7 +52,22 @@ func New(ctx context.Context, home string, logger *log.Logger) (*App, error) {
 	application := &App{Home: home, Logger: logger, cfg: cfg}
 	application.Store = project.NewStore(home, cfg.DefaultSchedule)
 	application.Reviews = review.NewManager(ctx, application.Store, application.Config, logger)
+	application.Notifier = notify.New(application.Config, application.BaseURL, logger)
+	application.Reviews.SetFinishedHook(application.Notifier.ReviewFinished)
 	return application, nil
+}
+
+// SetListen records the address serve listens on. Call it before serving;
+// it is not synchronized.
+func (a *App) SetListen(address string) { a.listen = address }
+
+// BaseURL is the address local clients (browser links, MCP clients) use.
+func (a *App) BaseURL() string {
+	listen := a.listen
+	if listen == "" {
+		listen = a.Config().Listen
+	}
+	return config.LocalURL(listen)
 }
 
 // Config returns the current configuration.

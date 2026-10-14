@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 
-import { ErrorBlock, LoadingBlock, Section } from "@/components/common";
+import {
+  ErrorBlock,
+  FieldLabel as Label,
+  LoadingBlock,
+  Section,
+} from "@/components/common";
+import { Segmented } from "@/components/segmented";
 import { KindIcon } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +27,8 @@ import { invalidate, useQuery } from "@/lib/query";
 import { AUTO_REVIEWER, orderReviewers, reviewerLabel } from "@/lib/reviewers";
 import type { Config, ReviewerInfo } from "@/lib/types";
 import { useMeta, useUI } from "@/lib/ui-state";
+import { McpSettingsCard } from "@/views/mcp-settings";
+import { NotifySettingsCard } from "@/views/notify-settings";
 import { ReviewerAgents } from "@/views/reviewer-agents";
 
 /** Report languages offered as one-click presets; any other text works too. */
@@ -212,6 +220,10 @@ function SettingsForm({ initial }: { initial: Config }) {
           </p>
         </Section>
 
+        <NotifySettingsCard initial={initial.notify} />
+
+        <McpSettingsCard />
+
         <Section title={t("Projects")}>
           <div className="flex items-center gap-3">
             <p className="text-[13px] text-muted-foreground">
@@ -249,19 +261,15 @@ function InterfaceLanguage() {
     }
   };
   return (
-    <div className="flex w-fit rounded-md border p-0.5">
-      {LANGUAGES.map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          disabled={switching}
-          onClick={() => void choose(option.id)}
-          className={`rounded px-2.5 py-0.5 text-xs transition-colors ${language === option.id ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      value={language}
+      disabled={switching}
+      onChange={(next) => void choose(next)}
+      options={LANGUAGES.map((option) => ({
+        value: option.id,
+        label: option.label,
+      }))}
+    />
   );
 }
 
@@ -343,33 +351,12 @@ export function ScheduleRow({
         <KindIcon kind={kind} className="text-muted-foreground" />
         {kindLabel(kind)}
       </span>
-      <div className="flex w-fit rounded-md border p-0.5">
-        {options.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onChange(option)}
-            className={`rounded px-2.5 py-0.5 text-xs capitalize transition-colors ${value === option ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            {t(option)}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        className="capitalize"
+        value={value}
+        onChange={onChange}
+        options={options.map((option) => ({ value: option, label: t(option) }))}
+      />
     </>
-  );
-}
-
-function Label({
-  children,
-  hint,
-}: {
-  children: React.ReactNode;
-  hint?: string;
-}) {
-  return (
-    <div>
-      <div className="text-[13px]">{children}</div>
-      {hint && <div className="text-[11px] text-muted-foreground">{hint}</div>}
-    </div>
   );
 }

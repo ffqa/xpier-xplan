@@ -41,6 +41,30 @@ type Manager struct {
 	testLocks map[string]*sync.Mutex
 	health    *HealthBook
 	baseCtx   context.Context
+
+	onFinished FinishedHook
+}
+
+// FinishedHook is called once a job run ends, with a copy of the job.
+type FinishedHook func(job Job, projectName string)
+
+// SetFinishedHook registers the callback for finished jobs.
+func (m *Manager) SetFinishedHook(hook FinishedHook) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onFinished = hook
+}
+
+// announce hands the final job to the finished hook without blocking the
+// worker slot.
+func (m *Manager) announce(target *project.Project, job *Job) {
+	m.mu.Lock()
+	hook := m.onFinished
+	final := *job
+	m.mu.Unlock()
+	if hook != nil {
+		go hook(final, target.Name)
+	}
 }
 
 // NewManager creates a manager; settings is read at run time so config edits
@@ -139,6 +163,7 @@ func (m *Manager) Enqueue(slug, kindID, question, trigger string) (*Job, error) 
 // run waits for a slot, executes the agent and records the outcome.
 func (m *Manager) run(ctx context.Context, target *project.Project, kind Kind, job *Job) {
 	defer m.forget(job.ID)
+	defer m.announce(target, job)
 
 	select {
 	case m.slots <- struct{}{}:
@@ -254,6 +279,10 @@ func (m *Manager) buildPrompt(target *project.Project, kind Kind, job *Job) (str
 	if kind.ID == KindIntent {
 		firstCommits = scanner.FirstCommits(target.Path, maxFirstCommits)
 	}
+	var siblings []SiblingProject
+	if kind.ID == KindDrift {
+		siblings = m.siblingProjects(target.Slug)
+	}
 	language := m.settings().ReportLanguage
 	if language == "" {
 		language = "English"
@@ -269,6 +298,7 @@ func (m *Manager) buildPrompt(target *project.Project, kind Kind, job *Job) (str
 		PreviousJob:  previous,
 		Language:     language,
 		FirstCommits: firstCommits,
+		Siblings:     siblings,
 	}), nil
 }
 

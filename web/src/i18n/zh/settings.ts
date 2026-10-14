@@ -112,6 +112,7 @@ export const settings: Record<string, string> = {
   schedule: "定时",
   console: "控制台",
   bulk: "批量",
+  mcp: "MCP（agent）",
 
   // lib/reviewers.ts
   "auto → {name}": "auto → {name}",
@@ -151,4 +152,47 @@ export const settings: Record<string, string> = {
   "Default reviewer (read-only). Not checked yet: it is tested on first use, or test it in Settings.":
     "默认评审工具（只读）。尚未检查：首次使用时会自动测试，也可以在设置里手动测试。",
   "reports in {language}": "报告语言：{language}",
+
+  // Notifications
+  Notifications: "通知",
+  "Send a test": "发送测试",
+  "Notify when": "什么时候通知",
+  "Failed reviews always notify": "评审失败总会通知",
+  "Needs attention or worse": "需关注及以上",
+  "Critical only": "仅严重",
+  Desktop: "桌面通知",
+  "A system notification on this computer": "在这台电脑上弹出系统通知",
+  "Not available on this system": "当前系统不支持",
+  On: "开",
+  Off: "关",
+  "Chat webhook": "聊天机器人 Webhook",
+  "Slack, Feishu/Lark, DingTalk, WeCom, Discord or any JSON endpoint":
+    "支持 Slack、飞书/Lark、钉钉、企业微信、Discord，或任意接收 JSON 的地址",
+  Replace: "更换",
+  Remove: "移除",
+  "Remove the webhook?": "确定移除这个 Webhook 吗？",
+  "Webhook removed": "Webhook 已移除",
+  "Webhook saved": "Webhook 已保存",
+  "Notifications come from the running xplan, so they need `xplan service install` (or an open `xplan serve`). The webhook URL is stored in config.yaml and never shown again. For DingTalk, add the keyword xplan to the bot.":
+    "通知由正在运行的 xplan 发出，所以需要先执行 `xplan service install`（或保持 `xplan serve` 开着）。Webhook 地址保存在 config.yaml 里，保存后不再显示。钉钉机器人请把 xplan 加为关键词。",
+  "{channel}: sent": "{channel}：已发送",
+  "{channel}: {error}": "{channel}：{error}",
+
+  // views/mcp-settings.tsx
+  "Agent memory (MCP)": "Agent 项目记忆（MCP）",
+  "Coding agents read each project's intent, decisions, park notes and review findings, and can leave park notes, notes and proposed decisions. They cannot change the intent. It is project memory, not a general-purpose store.":
+    "编程 agent 可以读取每个项目的初衷、决策、停车笔记和评审发现，也可以留下停车笔记、备注和决策提案，但不能改初衷。这是项目记忆，不是通用的记忆仓库。",
+  Terminal: "终端",
+  "Any agent that starts MCP servers as commands":
+    "任何以命令方式启动 MCP 服务的 agent",
+  "Other (stdio)": "其他（stdio）",
+  "Add to your agent rules (AGENTS.md, Cursor rules…)":
+    "加到 agent 规则里（AGENTS.md、Cursor rules 等）",
+  "Tools agents see": "agent 能看到的工具",
+  reads: "只读",
+  writes: "可写",
+  "Agents reach xplan at {url}, so keep it running with `xplan service install`. Only local clients are accepted.":
+    "agent 通过 {url} 访问 xplan，所以请用 `xplan service install` 让它常驻。只接受本机的客户端。",
+  Copy: "复制",
+  Copied: "已复制",
 };

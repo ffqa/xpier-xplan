@@ -55,6 +55,7 @@ func newTestEnv(t *testing.T) *testEnv {
 			Command:     []string{"/bin/sh", "-c", "sleep 0.3; printf '%s' \"$XPLAN_FAKE\"", "{prompt}"},
 		}
 		cfg.DefaultReviewer = "fake"
+		cfg.Notify.Desktop = false // tests must not pop notifications on the developer's desktop
 		return nil
 	})
 	if err != nil {

@@ -91,18 +91,33 @@ func IntentIsDraft(content string) bool {
 	return false
 }
 
+// IntentGoal returns the Goal section of intent.md as one line of plain text
+// (bullets joined with "; "), capped at limit runes; empty when unwritten.
+func IntentGoal(content string, limit int) string {
+	body, found := SectionBody(content, headingGoal)
+	if !found {
+		return ""
+	}
+	var parts []string
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "-*"))
+		if trimmed == "" || strings.HasPrefix(trimmed, "<!--") || trimmed == "…" {
+			continue
+		}
+		parts = append(parts, plainText(trimmed))
+	}
+	goal := []rune(strings.Join(parts, "; "))
+	if len(goal) > limit {
+		return string(goal[:limit-1]) + "…"
+	}
+	return string(goal)
+}
+
 func sectionHasText(content, heading string) bool {
-	start := strings.Index(content, heading)
-	if start < 0 {
+	body, found := SectionBody(content, heading)
+	if !found {
 		// The user restructured the file; treat any substantial content as filled.
 		return len(strings.TrimSpace(content)) > 200
-	}
-	body := content[start+len(heading):]
-	if next := strings.Index(body, "\n## "); next >= 0 {
-		body = body[:next]
-	}
-	if rule := strings.Index(body, "\n---"); rule >= 0 {
-		body = body[:rule]
 	}
 	for _, line := range strings.Split(body, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -111,6 +126,23 @@ func sectionHasText(content, heading string) bool {
 		}
 	}
 	return false
+}
+
+// SectionBody returns the Markdown under heading (intent sections, ADR parts),
+// up to the next "## " heading or horizontal rule.
+func SectionBody(content, heading string) (string, bool) {
+	start := strings.Index(content, heading)
+	if start < 0 {
+		return "", false
+	}
+	body := content[start+len(heading):]
+	if next := strings.Index(body, "\n## "); next >= 0 {
+		body = body[:next]
+	}
+	if rule := strings.Index(body, "\n---"); rule >= 0 {
+		body = body[:rule]
+	}
+	return body, true
 }
 
 // readmeCandidates are tried in order when extracting a project description.

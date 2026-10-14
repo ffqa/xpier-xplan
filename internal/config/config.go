@@ -5,10 +5,13 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -25,7 +28,48 @@ type Config struct {
 	Language             string                 `yaml:"language" json:"language"`
 	ReportLanguage       string                 `yaml:"report_language" json:"report_language"`
 	DefaultSchedule      map[string]string      `yaml:"default_schedule" json:"default_schedule"`
+	Notify               NotifySettings         `yaml:"notify" json:"notify"`
 	Reviewers            map[string]ReviewerDef `yaml:"reviewers" json:"reviewers"`
+}
+
+// NotifyLevels are the verdicts a notification can be triggered from.
+var NotifyLevels = []string{"attention", "critical"}
+
+// NotifySettings decides when and where xplan reports a finished review.
+// The webhook URL is a credential, so it is never sent back over the API.
+type NotifySettings struct {
+	Desktop    bool   `yaml:"desktop" json:"desktop"`
+	WebhookURL string `yaml:"webhook_url,omitempty" json:"-"`
+	MinVerdict string `yaml:"min_verdict" json:"min_verdict"`
+}
+
+// DialAddress turns a listen address into one a local client can connect to
+// (a wildcard host becomes 127.0.0.1).
+func DialAddress(listen string) string {
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return listen
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return net.JoinHostPort(host, port)
+}
+
+// LocalURL is the base URL local clients (browser links, MCP clients) use.
+// It keeps 127.0.0.1 rather than "localhost": Node-based clients may resolve
+// localhost to ::1 first, where xplan does not listen.
+func LocalURL(listen string) string {
+	return "http://" + DialAddress(listen)
+}
+
+// ValidateWebhookURL accepts an http(s) URL with a host and no whitespace.
+func ValidateWebhookURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || strings.ContainsAny(raw, " \t\r\n") {
+		return errors.New("the webhook must be an http(s) URL")
+	}
+	return nil
 }
 
 // FileName is the config file name inside the home directory.
@@ -87,6 +131,7 @@ func Defaults() Config {
 			"deploy":   "off",
 			"test":     "off",
 		},
+		Notify:    NotifySettings{Desktop: true, MinVerdict: "attention"},
 		Reviewers: BuiltinReviewers(),
 	}
 }
@@ -155,6 +200,11 @@ func merge(dst, src *Config) {
 	}
 	for kind, schedule := range src.DefaultSchedule {
 		dst.DefaultSchedule[kind] = schedule
+	}
+	// Save always writes min_verdict, so an empty one means the file predates
+	// notifications and the defaults apply.
+	if slices.Contains(NotifyLevels, src.Notify.MinVerdict) {
+		dst.Notify = src.Notify
 	}
 	for name, def := range src.Reviewers {
 		if preset, isBuiltin := dst.Reviewers[name]; isBuiltin {

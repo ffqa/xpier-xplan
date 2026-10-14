@@ -288,7 +288,45 @@ export interface Config {
   language: string;
   report_language: string;
   default_schedule: Record<string, string>;
+  notify: NotifySettings;
   reviewers: Record<string, ReviewerDef>;
+}
+
+/** Notification settings as the API shows them; the webhook URL itself never
+ * leaves the server, only a recognizable hint. */
+export interface NotifySettings {
+  desktop: boolean;
+  desktop_available: boolean;
+  min_verdict: "attention" | "critical";
+  webhook_set: boolean;
+  webhook_hint: string;
+}
+
+/** Changes to notifications; webhook_url "" removes the webhook. */
+export interface NotifyPatch {
+  desktop?: boolean;
+  min_verdict?: "attention" | "critical";
+  webhook_url?: string;
+}
+
+/** How coding agents connect to xplan's MCP endpoint. */
+export interface McpInfo {
+  url: string;
+  binary: string;
+  tools: McpTool[];
+}
+
+export interface McpTool {
+  name: string;
+  title: string;
+  description: string;
+  read_only: boolean;
+}
+
+export interface NotifyResult {
+  channel: "desktop" | "webhook";
+  ok: boolean;
+  error?: string;
 }
 
 export interface ConsoleResult {

@@ -11,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/ffqa/xpier-xplan/internal/app"
 	"github.com/ffqa/xpier-xplan/internal/config"
+	"github.com/ffqa/xpier-xplan/internal/desktop"
 	"github.com/ffqa/xpier-xplan/internal/insight"
 	"github.com/ffqa/xpier-xplan/internal/project"
 	"github.com/ffqa/xpier-xplan/internal/server"
@@ -31,7 +31,12 @@ Usage:
   xplan [--home DIR] <command> [args]
 
 Commands:
-  serve [--listen ADDR] [--no-schedule] [--open]   Start the web UI (default 127.0.0.1:7788)
+  serve [--listen ADDR] [--no-schedule] [--open] [--log-file PATH]
+                                                    Start the web UI (default 127.0.0.1:7788)
+  service install|uninstall|restart|status          Run serve in the background at login
+                                                    (launchd on macOS, systemd --user on Linux)
+  mcp [--url URL]                                   Stdio bridge to the MCP endpoint of the running
+                                                    server, for agents that cannot use HTTP MCP
   add <path> [--name NAME]                          Register a project directory
   discover <root> [--add]                           List (or register) git repos under root
   list                                              List registered projects
@@ -82,6 +87,8 @@ func main() {
 		"brief":    cmdBrief,
 		"park":     cmdPark,
 		"review":   cmdReview,
+		"service":  cmdService,
+		"mcp":      cmdMCP,
 	}
 	run, ok := commands[args[0]]
 	if !ok {
@@ -99,12 +106,22 @@ func cmdServe(ctx context.Context, application *app.App, args []string) error {
 	listen := flags.String("listen", application.Config().Listen, "listen address")
 	noSchedule := flags.Bool("no-schedule", false, "do not run scheduled reviews")
 	openBrowser := flags.Bool("open", false, "open the UI in the default browser")
+	logPath := flags.String("log-file", "", "write the log to this file (rotated at 5 MB) instead of stderr")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	if *logPath != "" {
+		logFile, err := openRotatingFile(*logPath)
+		if err != nil {
+			return err
+		}
+		defer logFile.Close()
+		application.Logger.SetOutput(logFile)
+	}
+	application.SetListen(*listen)
 	static := web.Dist()
 	if static == nil {
-		application.Logger.Printf("UI not embedded (run `make web` then rebuild); serving API only")
+		application.Logger.Printf("web UI not embedded (download a release build or run `make build`); serving the API and MCP only")
 	}
 	httpServer := &http.Server{
 		Addr:              *listen,
@@ -115,10 +132,10 @@ func cmdServe(ctx context.Context, application *app.App, args []string) error {
 
 	errs := make(chan error, 1)
 	go func() { errs <- httpServer.ListenAndServe() }()
-	url := "http://" + strings.Replace(*listen, "0.0.0.0", "127.0.0.1", 1)
+	url := application.BaseURL()
 	application.Logger.Printf("xplan %s serving %s (home %s, scheduled reviews %v)", app.Version, url, application.Home, !*noSchedule)
 	if *openBrowser {
-		if err := exec.Command("open", url).Start(); err != nil {
+		if err := desktop.Open(url); err != nil {
 			application.Logger.Printf("open browser: %v", err)
 		}
 	}

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -45,7 +44,7 @@ func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.app.Config())
+	writeJSON(w, http.StatusOK, newConfigView(s.app.Config()))
 }
 
 type configPatch struct {
@@ -57,6 +56,7 @@ type configPatch struct {
 	ReviewTimeout        *string           `json:"review_timeout"`
 	MaxConcurrentReviews *int              `json:"max_concurrent_reviews"`
 	DefaultSchedule      map[string]string `json:"default_schedule"`
+	Notify               *notifyPatch      `json:"notify"`
 }
 
 func (s *Server) handlePatchConfig(w http.ResponseWriter, r *http.Request) {
@@ -102,13 +102,13 @@ func (s *Server) handlePatchConfig(w http.ResponseWriter, r *http.Request) {
 			}
 			cfg.DefaultSchedule[kind] = value
 		}
-		return nil
+		return applyNotifyPatch(&cfg.Notify, patch.Notify)
 	})
 	if err != nil {
 		s.writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, updated)
+	writeJSON(w, http.StatusOK, newConfigView(updated))
 }
 
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
@@ -120,44 +120,14 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"cards": cards, "active_reviews": s.app.Reviews.Active()})
 }
 
-type inboxItem struct {
-	Project     string         `json:"project"`
-	ProjectName string         `json:"project_name"`
-	Kind        string         `json:"kind"`
-	JobID       string         `json:"job_id"`
-	Verdict     string         `json:"verdict"`
-	At          time.Time      `json:"at"`
-	Finding     review.Finding `json:"finding"`
-}
-
-var severityRank = map[string]int{"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
-
 // handleInbox lists findings from the latest finished review of every kind,
 // across all projects, most severe first.
 func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
-	projectList, err := s.app.Store.List()
+	items, err := s.app.Inbox("", r.URL.Query().Get("min"))
 	if err != nil {
 		s.writeError(w, err)
 		return
 	}
-	minimum := severityRank[r.URL.Query().Get("min")]
-	items := []inboxItem{}
-	for _, item := range projectList {
-		for kind, job := range s.app.Reviews.LatestDone(item.Slug) {
-			for _, finding := range job.Findings {
-				if severityRank[finding.Severity] < minimum {
-					continue
-				}
-				items = append(items, inboxItem{Project: item.Slug, ProjectName: item.Name, Kind: kind, JobID: job.ID, Verdict: job.Verdict, At: job.CreatedAt, Finding: finding})
-			}
-		}
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		if severityRank[items[i].Finding.Severity] != severityRank[items[j].Finding.Severity] {
-			return severityRank[items[i].Finding.Severity] > severityRank[items[j].Finding.Severity]
-		}
-		return items[i].At.After(items[j].At)
-	})
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 

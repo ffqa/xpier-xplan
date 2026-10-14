@@ -2,6 +2,36 @@
 
 Recurring problems and how they were resolved. Newest first.
 
+## 2026-10-14
+
+### Background server died with the shell (seen again)
+
+- **Symptom**: after a rebuild, `(nohup ./xplan serve --no-schedule &)` printed
+  a PID, yet the browser showed an empty page a minute later and the port was
+  free.
+- **Cause**: the tool shell that started it ended, and the server went with it.
+- **Fix**: start the server as its own long-running background command, never
+  with `nohup … &` inside a short command. For real use, `xplan service
+install` is the answer.
+
+### `npm run build` removed `web/dist/.gitkeep`
+
+- **Symptom**: `git status` showed `D web/dist/.gitkeep` after a frontend build.
+- **Cause**: Vite empties `dist/` on every build; only `make web` recreated the
+  file.
+- **Fix**: the `build` script itself now writes `dist/.gitkeep`, so every build
+  path keeps fresh clones compiling.
+
+### Toasts "missing" in an automated browser check
+
+- **Symptom**: after "Send a test", a poll for `[data-sonner-toast]` found
+  nothing, which looked like a broken UI.
+- **Cause**: the selector was wrong for this Toaster; the request itself took
+  15 s (unreachable test webhook). A MutationObserver on the notifications
+  region showed both results arriving.
+- **Lesson**: confirm the API with curl first, then observe the UI region
+  rather than guessing a selector.
+
 ## 2026-10-13
 
 ### "timed out after 20m0s / Working..." on omp

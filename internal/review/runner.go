@@ -8,8 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ffqa/xpier-xplan/internal/config"
@@ -69,17 +69,39 @@ type ArgvVars struct {
 }
 
 // extraPathDirs are appended to PATH so agents installed in user locations are
-// found even when xplan is started from launchd with a minimal environment.
+// found even when xplan runs as a background service with a minimal PATH.
 func extraPathDirs() []string {
-	userHome, _ := os.UserHomeDir()
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
 	dirs := []string{
 		filepath.Join(userHome, ".local", "bin"),
-		"/opt/homebrew/bin",
-		"/usr/local/bin",
 		filepath.Join(userHome, ".opencode", "bin"),
+		filepath.Join(userHome, ".bun", "bin"),
+		filepath.Join(userHome, ".volta", "bin"),
+		filepath.Join(userHome, "go", "bin"),
 	}
-	nvmBins, _ := filepath.Glob(filepath.Join(userHome, "Library", "Application Support", "Herd", "config", "nvm", "versions", "node", "*", "bin"))
-	return append(dirs, nvmBins...)
+	switch runtime.GOOS {
+	case "darwin":
+		dirs = append(dirs, "/opt/homebrew/bin", "/usr/local/bin")
+	case "linux":
+		dirs = append(dirs, "/usr/local/bin", "/home/linuxbrew/.linuxbrew/bin")
+	case "windows":
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			dirs = append(dirs, filepath.Join(appData, "npm"))
+		}
+	}
+	nodeManagers := []string{
+		filepath.Join(userHome, ".nvm", "versions", "node", "*", "bin"),
+		filepath.Join(userHome, ".local", "share", "fnm", "node-versions", "*", "installation", "bin"),
+		filepath.Join(userHome, "Library", "Application Support", "Herd", "config", "nvm", "versions", "node", "*", "bin"),
+	}
+	for _, pattern := range nodeManagers {
+		matches, _ := filepath.Glob(pattern)
+		dirs = append(dirs, matches...)
+	}
+	return dirs
 }
 
 // AugmentedPath returns PATH with the extra agent directories appended.
@@ -91,7 +113,7 @@ func AugmentedPath() string {
 
 // LookupAgent resolves an agent binary against the augmented PATH.
 func LookupAgent(binary string) (string, error) {
-	if strings.Contains(binary, "/") {
+	if strings.ContainsAny(binary, `/\`) {
 		if _, err := os.Stat(binary); err != nil {
 			return "", fmt.Errorf("%w: %s not found", ErrAgentMissing, binary)
 		}
@@ -101,9 +123,10 @@ func LookupAgent(binary string) (string, error) {
 		if dir == "" {
 			continue
 		}
-		candidate := filepath.Join(dir, binary)
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
-			return candidate, nil
+		for _, candidate := range agentCandidates(dir, binary) {
+			if info, err := os.Stat(candidate); err == nil && isRunnable(info) {
+				return candidate, nil
+			}
 		}
 	}
 	return "", fmt.Errorf("%w: %q is not on PATH", ErrAgentMissing, binary)
@@ -163,13 +186,7 @@ func runAgent(ctx context.Context, argv []string, projectPath, outputPath, logPa
 	cmd.Stdin = nil // agents must never wait for interactive input
 	cmd.Stdout = outputFile
 	cmd.Stderr = logFile
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		if cmd.Process == nil {
-			return nil
-		}
-		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	}
+	killTreeOnCancel(cmd)
 	cmd.WaitDelay = 5 * time.Second
 
 	runErr := cmd.Run()

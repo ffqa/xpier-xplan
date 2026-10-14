@@ -19,6 +19,7 @@ type Kind struct {
 const (
 	KindAsk    = "ask"
 	KindIntent = "intent"
+	KindDrift  = "drift"
 )
 
 // Kinds is the ordered list of review kinds shown in the UI.
@@ -31,7 +32,7 @@ var Kinds = []Kind{
 		Instructions: `Judge alignment with the intent. Compare the Intent and Decisions above against what the project has actually been doing recently (commits, changed docs, xteam slices, current code). Answer:
 1. Is recent work moving toward the stated goal?
 2. Scope creep: work that serves none of the goals, or contradicts a non-goal.
-3. Contamination: concepts, naming, dependencies or features that look like they belong to a different project rather than this one.
+3. Contamination: concepts, naming, dependencies or features that look like they belong to one of the other projects listed above rather than this one. Name the project each one seems to come from. Shared generic technology (the same language, framework or library) is not contamination; borrowed domain concepts, vocabulary and features are.
 4. Decisions that were made in code but never written down (propose ADR titles).
 Verdict mapping: ok = aligned, attention = drifting, critical = off-track.
 If the intent is empty, say so, infer the de-facto intent from README/specs, and use verdict attention.
