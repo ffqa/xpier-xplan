@@ -734,6 +734,11 @@ gateway` while Claude Code retried up to 11 times. The smoke test shows it as
   `go:embed`. The build script now recreates it.
 - A background server started with `nohup … &` from a tool shell died with the
   shell again (see `docs/diary.md`).
+- Testing `service restart` and a hard kill right after install interrupted
+  the first scheduled review. It was marked failed with a clear message, and
+  because the scheduler counts failed attempts it would not have retried for a
+  week; it had to be queued by hand. The upside: a broken reviewer cannot spam
+  failure notifications every minute.
 
 **Still open**
 
@@ -742,3 +747,9 @@ gateway` while Claude Code retried up to 11 times. The smoke test shows it as
 - Team sharing (several people on one xplan) is not designed yet.
 - Windows has no background service or desktop notification, and npm `.cmd`
   shims may mangle multi-line prompts.
+- A browser tab opened before an upgrade keeps the old bundle and shows the old
+  version until reloaded; the UI could compare `/api/meta` with its build.
+- Release binaries are not code-signed or notarized (README explains the macOS
+  quarantine workaround).
+- Interrupted scheduled reviews wait a full period; retrying once after an
+  interruption (not after a real failure) would be better.

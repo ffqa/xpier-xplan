@@ -49,6 +49,10 @@ xplan add ~/code/my-app        # register a project (or: xplan discover ~/code -
 Then open `http://localhost:7788`. Windows: download the zip from
 [Releases](https://github.com/ffqa/xpier-xplan/releases) and run `xplan serve`.
 
+The binaries are not code-signed. The install script is not affected, but a
+macOS archive downloaded with a browser is quarantined; clear it with
+`xattr -d com.apple.quarantine ./xplan`. Windows SmartScreen may ask once too.
+
 From a clone: `make build && ./xplan serve --open`.
 
 Some embedded browsers render an empty page for `127.0.0.1`, while `localhost`
